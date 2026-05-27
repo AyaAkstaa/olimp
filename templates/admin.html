@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .admin-panel {
+        display: grid;
+        gap: 24px;
+    }
+    .admin-welcome {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 24px;
+        background: rgba(230,0,122,0.08);
+        border: 2px solid rgba(230,0,122,0.45);
+    }
+    .admin-welcome h2 {
+        margin: 0;
+        font-size: 1.8rem;
+    }
+    .admin-welcome p {
+        margin: 0;
+        color: #ddd;
+    }
+    .admin-form {
+        display: grid;
+        gap: 18px;
+        padding: 24px;
+        border: 2px solid rgba(230,0,122,0.55);
+        background: rgba(12,12,12,0.95);
+    }
+    .admin-form label {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #eee;
+    }
+    .admin-form input,
+    .admin-form select {
+        padding: 14px;
+        border: 2px solid rgba(230,0,122,0.75);
+        background: #121212;
+        color: #fff;
+        outline: none;
+    }
+    .admin-form button {
+        background: var(--danger);
+        color: var(--black);
+        padding: 16px;
+        border: none;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+    }
+    .admin-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .admin-footer a {
+        color: var(--danger);
+        text-decoration: none;
+        border-bottom: 1px dashed rgba(230,0,122,0.7);
+    }
+</style>
+
+<div class="admin-panel">
+    <div class="admin-welcome dangan-box" style="background: rgba(0,0,0,0.85); border-color: rgba(255,255,255,0.2);">
+        <div>
+            <h2>Админ-панель результатов</h2>
+            <p>{% if user %}Добро пожаловать, {{ user }}!{% else %}Пройдите авторизацию, чтобы управлять результатами.{% endif %}</p>
+        </div>
+        <div style="font-size: 0.95rem; color: #ccc; text-align: right;">Добавляй результаты, наблюдай за таблицей лидеров и держи игру под контролем.</div>
+    </div>
+
+    <form action="/admin/add_result" method="POST" class="admin-form">
+        <label>Игра</label>
+        <select name="game_id">
+            {% for game in games %}
+                <option value="{{ game.id }}">{{ game.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Имя игрока</label>
+        <input type="text" name="player_name" required placeholder="Например, Хината">
+
+        <label>Счет (очки)</label>
+        <input type="number" name="score" required placeholder="Введите количество очков">
+
+        <button type="submit">Добавить результат</button>
+    </form>
+
+    <div class="admin-footer">
+        <a href="/">Вернуться на сайт</a>
+        <span style="color:#aaa;">Данные сохраняются в локальный файл SQLite.</span>
+    </div>
+</div>
+{% endblock %}

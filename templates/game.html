@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .game-header { margin-bottom: 32px; }
+    .game-subtitle {
+        color: var(--danger);
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+    }
+    .game-description {
+        font-size: 1.05rem;
+        line-height: 1.7;
+        color: #e7e7e7;
+    }
+    .leaderboard {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 24px;
+        background: rgba(255,255,255,0.04);
+        color: #f7f7f7;
+        border: 2px solid rgba(230,0,122,0.65);
+        backdrop-filter: blur(2px);
+    }
+    .leaderboard th {
+        background: rgba(230,0,122,0.95);
+        color: var(--white);
+        padding: 18px 16px;
+        text-transform: uppercase;
+        font-size: 1.05rem;
+        border-bottom: 1px solid rgba(255,255,255,0.18);
+        text-align: left;
+    }
+    .leaderboard td {
+        padding: 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        font-size: 1rem;
+    }
+    .leaderboard tr:nth-child(odd) { background: rgba(255,255,255,0.03); }
+    .leaderboard tr:hover { background: rgba(230,0,122,0.12); }
+    .rank-1 { color: #ffd700; text-shadow: 1px 1px 0px #000; font-size: 1.3rem; }
+    .back-link {
+        display: inline-flex;
+        margin-top: 26px;
+        color: var(--danger);
+        font-size: 1.05rem;
+        text-decoration: none;
+        border-bottom: 1px dashed rgba(230,0,122,0.7);
+    }
+</style>
+
+<div class="game-header">
+    <div class="game-subtitle">Игра в центре внимания</div>
+    <h1 class="title-splash">{{ game.name }}</h1>
+    <div class="dangan-box" style="padding: 24px;">
+        <p class="game-description">{{ game.description }}</p>
+    </div>
+</div>
+
+<div class="dangan-box" style="background: rgba(15,15,15,0.9); border-color: rgba(230,0,122,0.85);">
+    <h2 style="color: var(--danger); margin-top: 0;">ТАБЛИЦА ЛИДЕРОВ</h2>
+    <table class="leaderboard">
+        <thead>
+            <tr>
+                <th>Место</th>
+                <th>Игрок</th>
+                <th>Очки</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if results %}
+                {% for result in results %}
+                <tr>
+                    <td class="{% if loop.index == 1 %}rank-1{% endif %}">#{{ loop.index }}</td>
+                    <td><b>{{ result.player_name }}</b></td>
+                    <td>{{ result.score }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #ddd;">Результатов пока нет. Станьте первым!</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<a href="/" class="back-link">❮ Назад к списку игр</a>
+{% endblock %}

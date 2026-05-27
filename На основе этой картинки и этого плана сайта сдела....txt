@@ -1,0 +1,495 @@
+﻿Для реализации этого проекта мы будем использовать FastAPI для бэкенда (с базой данных SQLite для хранения игр и результатов) и шаблонизатор Jinja2 для фронтенда.
+Чтобы дизайн соответствовал стилистике Danganronpa (как на вашем макете), мы используем агрессивные контрасты (черный, белый и ярко-розовый #E6007A), скошенные углы (transform: skewX), грязно-текстурные элементы и рубленые шрифты.
+Структура проекта:
+
+
+
+
+
+
+Plaintext
+project/
+├── main.py
+└── templates/
+   ├── base.html
+   ├── index.html
+   ├── game.html
+   └── admin.html
+
+1. Установка зависимостей
+В терминале выполните команду для установки необходимых библиотек:
+
+
+
+
+
+
+Bash
+pip install fastapi uvicorn sqlalchemy jinja2 python-multipart
+
+2. Бэкенд (main.py)
+Этот файл содержит логику сервера, создание базы данных и роуты. Запуск базы данных и наполнение базовыми играми произойдет автоматически при первом старте.
+
+
+
+
+
+
+Python
+from fastapi import FastAPI, Request, Form, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, desc
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
+import os
+
+# --- Настройка Базы Данных ---
+SQLALCHEMY_DATABASE_URL = "sqlite:///./olympiad.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class Game(Base):
+   __tablename__ = "games"
+   id = Column(Integer, primary_key=True, index=True)
+   slug = Column(String, unique=True, index=True)
+   name = Column(String)
+   description = Column(String)
+
+class Result(Base):
+   __tablename__ = "results"
+   id = Column(Integer, primary_key=True, index=True)
+   game_id = Column(Integer, ForeignKey("games.id"))
+   player_name = Column(String)
+   score = Column(Integer)
+
+Base.metadata.create_all(bind=engine)
+
+# Инициализация приложения
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+# Зависимость для БД
+def get_db():
+   db = SessionLocal()
+   try:
+       yield db
+   finally:
+       db.close()
+
+# Заполнение БД по умолчанию, если пустая
+@app.on_event("startup")
+def startup_event():
+   db = SessionLocal()
+   if not db.query(Game).first():
+       games = [
+           Game(slug="geoguessr", name="Геогессер", description="Угадай место на карте по панораме. Докажи, что знаешь этот мир лучше остальных!"),
+           Game(slug="minecraft", name="Майнкрафт", description="Соревнования по строительству и выживанию. Твой кубический талант приведет тебя к победе."),
+           Game(slug="monopoly", name="Монополия", description="Экономическая стратегия. Захвати все предприятия и обанкроть своих противников."),
+           Game(slug="quiz", name="Квиз", description="Интеллектуальная битва. Отвечай на вопросы быстрее всех!"),
+           Game(slug="tictactoe", name="Крестики-нолики", description="Классика в новом формате. Выстрой свою линию и не дай шанса врагу.")
+       ]
+       db.add_all(games)
+       db.commit()
+   db.close()
+
+# --- Роуты ---
+
+@app.get("/", response_class=HTMLResponse)
+def read_root(request: Request, db: Session = Depends(get_db)):
+   games = db.query(Game).all()
+   return templates.TemplateResponse("index.html", {"request": request, "games": games})
+
+@app.get("/olympiad", response_class=HTMLResponse)
+def read_olympiad(request: Request, db: Session = Depends(get_db)):
+   # В данном случае страница олимпиады может просто дублировать список игр
+   games = db.query(Game).all()
+   return templates.TemplateResponse("index.html", {"request": request, "games": games})
+
+@app.get("/game/{slug}", response_class=HTMLResponse)
+def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
+   game = db.query(Game).filter(Game.slug == slug).first()
+   if not game:
+       return RedirectResponse(url="/")
+   
+   # Получаем результаты, отсортированные по убыванию очков
+   results = db.query(Result).filter(Result.game_id == game.id).order_by(desc(Result.score)).all()
+   return templates.TemplateResponse("game.html", {"request": request, "game": game, "results": results})
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_panel(request: Request, db: Session = Depends(get_db)):
+   games = db.query(Game).all()
+   return templates.TemplateResponse("admin.html", {"request": request, "games": games})
+
+@app.post("/admin/add_result")
+def add_result(game_id: int = Form(...), player_name: str = Form(...), score: int = Form(...), db: Session = Depends(get_db)):
+   new_result = Result(game_id=game_id, player_name=player_name, score=score)
+   db.add(new_result)
+   db.commit()
+   return RedirectResponse(url="/admin", status_code=303)
+
+3. Фронтенд (Шаблоны)
+Создайте папку templates в той же директории, где находится main.py, и добавьте в нее следующие HTML-файлы.
+templates/base.html (Основной каркас и CSS-стили)
+
+
+
+
+
+
+HTML
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Олимпиада по Играм | Отчаяние и Талант</title>
+   <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+   <style>
+       :root {
+           --pink: #E6007A;
+           --black: #0c0c0c;
+           --white: #f5f5f5;
+           --dark-gray: #1a1a1a;
+       }
+       body {
+           margin: 0;
+           font-family: 'Russo One', sans-serif;
+           background-color: var(--white);
+           color: var(--black);
+           overflow-x: hidden;
+           background-image: radial-gradient(var(--dark-gray) 1px, transparent 1px);
+           background-size: 20px 20px; /* Эффект halftone */
+       }
+       a { text-decoration: none; color: inherit; }
+       
+       /* Навигация */
+       .navbar {
+           background-color: var(--black);
+           color: var(--white);
+           display: flex;
+           justify-content: space-between;
+           align-items: center;
+           padding: 0 40px;
+           height: 80px;
+           border-bottom: 5px solid var(--pink);
+           position: relative;
+       }
+       .nav-links {
+           display: flex;
+           gap: 30px;
+       }
+       .nav-link {
+           font-size: 1.2rem;
+           text-transform: uppercase;
+           position: relative;
+           padding: 10px 15px;
+           transition: 0.3s;
+       }
+       .nav-link:hover {
+           color: var(--pink);
+       }
+       .nav-link.active::after {
+           content: '';
+           position: absolute;
+           bottom: -5px;
+           left: 0;
+           width: 100%;
+           height: 4px;
+           background-color: var(--pink);
+           transform: skewX(-20deg);
+       }
+       .auth-btn {
+           background-color: transparent;
+           border: 2px solid var(--pink);
+           color: var(--white);
+           padding: 10px 25px;
+           font-family: 'Russo One', sans-serif;
+           text-transform: uppercase;
+           transform: skewX(-15deg);
+           cursor: pointer;
+           transition: 0.3s;
+       }
+       .auth-btn:hover {
+           background-color: var(--pink);
+           color: var(--white);
+       }
+       .auth-btn span {
+           display: block;
+           transform: skewX(15deg); /* Возвращаем текст в прямое положение */
+       }
+
+       /* Контейнер контента */
+       .container {
+           max-width: 1200px;
+           margin: 0 auto;
+           padding: 40px 20px;
+       }
+
+       /* Danganronpa стилистика: скошенные плашки */
+       .dangan-box {
+           background: var(--black);
+           color: var(--white);
+           border: 4px solid var(--pink);
+           padding: 20px;
+           transform: skewX(-5deg);
+           box-shadow: 10px 10px 0px rgba(230, 0, 122, 0.3);
+           margin-bottom: 30px;
+           position: relative;
+       }
+       .dangan-box > * {
+           transform: skewX(5deg);
+       }
+       
+       .title-splash {
+           font-size: 4rem;
+           color: var(--black);
+           text-transform: uppercase;
+           line-height: 1.1;
+           text-shadow: 4px 4px 0px var(--pink);
+           margin-bottom: 20px;
+       }
+   </style>
+</head>
+<body>
+
+   <nav class="navbar">
+       <div class="nav-links">
+           <a href="/" class="nav-link active">Главная</a>
+           <a href="/" class="nav-link">Олимпиада</a>
+       </div>
+       <div class="auth-box">
+           <button class="auth-btn"><span>Войти / Регистрация</span></button>
+       </div>
+   </nav>
+
+   <div class="container">
+       {% block content %}{% endblock %}
+   </div>
+
+</body>
+</html>
+
+templates/index.html (Главная страница со списком игр)
+
+
+
+
+
+
+HTML
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+   .hero { margin-bottom: 50px; }
+   .pink-text { color: var(--pink); text-shadow: 3px 3px 0px var(--black); }
+   
+   .games-grid {
+       display: grid;
+       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+       gap: 20px;
+       margin-top: 40px;
+   }
+   .game-card {
+       background: var(--dark-gray);
+       border: 3px solid var(--black);
+       padding: 15px;
+       transform: skewX(-8deg);
+       transition: 0.3s;
+       text-align: center;
+       color: var(--white);
+       cursor: pointer;
+       display: flex;
+       flex-direction: column;
+       justify-content: space-between;
+       min-height: 250px;
+       position: relative;
+       overflow: hidden;
+   }
+   .game-card::before {
+       content: '';
+       position: absolute;
+       top: 0; left: 0; width: 100%; height: 100%;
+       background: var(--pink);
+       transform: translateX(-101%);
+       transition: 0.4s ease-in-out;
+       z-index: 0;
+   }
+   .game-card:hover::before { transform: translateX(0); }
+   .game-card:hover { border-color: var(--pink); }
+   .game-card > * {
+       transform: skewX(8deg);
+       z-index: 1;
+       position: relative;
+   }
+   .game-id {
+       position: absolute;
+       top: 10px; left: 15px;
+       color: var(--pink);
+       font-size: 1.5rem;
+   }
+   .game-card:hover .game-id { color: var(--white); }
+   .game-title {
+       font-size: 1.5rem;
+       margin-top: 30px;
+       text-transform: uppercase;
+   }
+   .game-btn {
+       background: var(--black);
+       color: var(--pink);
+       border: none;
+       padding: 10px;
+       text-transform: uppercase;
+       font-family: 'Russo One', sans-serif;
+       margin-top: 20px;
+       width: 100%;
+   }
+</style>
+
+<div class="hero">
+   <h1 class="title-splash">ИГРАЙ.<br><span class="pink-text">ДУМАЙ.</span><br>ПОБЕЖДАЙ.</h1>
+   <div class="dangan-box" style="display: inline-block;">
+       <h2>ОЛИМПИАДА ПО ИГРАМ ДЛЯ НАСТОЯЩИХ ТАЛАНТОВ!</h2>
+   </div>
+</div>
+
+<div class="dangan-box" style="background: var(--pink); color: var(--white); border-color: var(--black); padding: 10px 20px;">
+   <h2>🎮 КАТЕГОРИИ ИГР</h2>
+</div>
+
+<div class="games-grid">
+   {% for game in games %}
+   <a href="/game/{{ game.slug }}" class="game-card">
+       <div class="game-id">0{{ loop.index }}</div>
+       <h3 class="game-title">{{ game.name }}</h3>
+       <div class="game-btn">ПОДРОБНЕЕ ❯</div>
+   </a>
+   {% endfor %}
+</div>
+{% endblock %}
+
+templates/game.html (Страница конкретной игры с таблицей результатов)
+
+
+
+
+
+
+HTML
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+   .game-header { margin-bottom: 40px; }
+   
+   .leaderboard {
+       width: 100%;
+       border-collapse: collapse;
+       margin-top: 20px;
+       background: var(--white);
+       color: var(--black);
+       border: 4px solid var(--black);
+   }
+   .leaderboard th {
+       background: var(--pink);
+       color: var(--white);
+       padding: 15px;
+       text-transform: uppercase;
+       font-size: 1.2rem;
+       border-bottom: 4px solid var(--black);
+       text-align: left;
+   }
+   .leaderboard td {
+       padding: 15px;
+       border-bottom: 2px solid var(--black);
+       font-size: 1.1rem;
+   }
+   .leaderboard tr:nth-child(even) { background: #e0e0e0; }
+   .leaderboard tr:hover { background: #ffccdf; }
+   .rank-1 { color: #ffd700; text-shadow: 1px 1px 0px #000; font-size: 1.5rem;}
+</style>
+
+<div class="game-header">
+   <h1 class="title-splash">{{ game.name }}</h1>
+   <div class="dangan-box">
+       <p style="font-size: 1.2rem; line-height: 1.5;">{{ game.description }}</p>
+   </div>
+</div>
+
+<div class="dangan-box" style="background: var(--dark-gray); border-color: var(--pink);">
+   <h2 style="color: var(--pink); margin-top: 0;">ТАБЛИЦА ЛИДЕРОВ</h2>
+   
+   <table class="leaderboard">
+       <thead>
+           <tr>
+               <th>Место</th>
+               <th>Игрок</th>
+               <th>Очки</th>
+           </tr>
+       </thead>
+       <tbody>
+           {% if results %}
+               {% for result in results %}
+               <tr>
+                   <td class="{% if loop.index == 1 %}rank-1{% endif %}">#{{ loop.index }}</td>
+                   <td><b>{{ result.player_name }}</b></td>
+                   <td>{{ result.score }}</td>
+               </tr>
+               {% endfor %}
+           {% else %}
+               <tr>
+                   <td colspan="3" style="text-align: center;">Результатов пока нет. Станьте первым!</td>
+               </tr>
+           {% endif %}
+       </tbody>
+   </table>
+</div>
+
+<a href="/" style="display: inline-block; margin-top: 20px; color: var(--pink); font-size: 1.2rem; text-decoration: underline;">❮ Назад к списку игр</a>
+{% endblock %}
+
+templates/admin.html (Панель администратора для заполнения результатов)
+
+
+
+
+
+
+HTML
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dangan-box">
+   <h2>АДМИН-ПАНЕЛЬ: ДОБАВЛЕНИЕ РЕЗУЛЬТАТА</h2>
+   <form action="/admin/add_result" method="POST" style="display: flex; flex-direction: column; gap: 15px; max-width: 400px;">
+       
+       <label>Игра:</label>
+       <select name="game_id" style="padding: 10px; font-family: 'Russo One'; border: 2px solid var(--pink);">
+           {% for game in games %}
+               <option value="{{ game.id }}">{{ game.name }}</option>
+           {% endfor %}
+       </select>
+       
+       <label>Имя Игрока:</label>
+       <input type="text" name="player_name" required style="padding: 10px; font-family: 'Russo One'; border: 2px solid var(--pink);">
+       
+       <label>Счет (очки):</label>
+       <input type="number" name="score" required style="padding: 10px; font-family: 'Russo One'; border: 2px solid var(--pink);">
+       
+       <button type="submit" style="background: var(--pink); color: var(--white); padding: 15px; border: none; font-family: 'Russo One'; cursor: pointer; text-transform: uppercase; margin-top: 10px;">
+           Добавить результат
+       </button>
+   </form>
+</div>
+<a href="/" style="color: var(--black); text-decoration: underline;">Вернуться на сайт</a>
+{% endblock %}
+
+Как запустить:
+1. Сохраните все файлы в правильной структуре.
+2. В терминале в папке project запустите сервер командой:
+Bash
+uvicorn main:app --reload
+
+3. Откройте браузер по адресу: http://127.0.0.1:8000
+4. Для добавления результатов в гибкие таблицы перейдите по адресу http://127.0.0.1:8000/admin. Данные сохраняются в локальный файл SQLite, поэтому не пропадут при перезапуске сервера.
