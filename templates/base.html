@@ -150,10 +150,11 @@
     <nav class="navbar">
         <div class="nav-links">
             <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Главная</a>
+            <a href="/schedule" class="nav-link {% if request.url.path == '/schedule' %}active{% endif %}">Расписание</a>
             <a href="/olympiad" class="nav-link {% if request.url.path.startswith('/olympiad') %}active{% endif %}">Олимпиада</a>
             <a href="/admin" class="nav-link {% if request.url.path == '/admin' %}active{% endif %}">Админ</a>
         </div>
-        <a href="/login" class="auth-btn"><span>Войти / Регистрация</span></a>
+        <a href="/register" class="auth-btn"><span>Регистрация</span></a>
     </nav>
 
     <div class="container">

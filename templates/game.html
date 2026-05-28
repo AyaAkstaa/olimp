@@ -14,7 +14,12 @@
         line-height: 1.7;
         color: #e7e7e7;
     }
-    .leaderboard {
+    .grid-two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+    }
+    .leaderboard, .schedule-table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 24px;
@@ -23,7 +28,7 @@
         border: 2px solid rgba(230,0,122,0.65);
         backdrop-filter: blur(2px);
     }
-    .leaderboard th {
+    .leaderboard th, .schedule-table th {
         background: rgba(230,0,122,0.95);
         color: var(--white);
         padding: 18px 16px;
@@ -32,13 +37,13 @@
         border-bottom: 1px solid rgba(255,255,255,0.18);
         text-align: left;
     }
-    .leaderboard td {
+    .leaderboard td, .schedule-table td {
         padding: 16px;
         border-bottom: 1px solid rgba(255,255,255,0.08);
         font-size: 1rem;
     }
-    .leaderboard tr:nth-child(odd) { background: rgba(255,255,255,0.03); }
-    .leaderboard tr:hover { background: rgba(230,0,122,0.12); }
+    .leaderboard tr:nth-child(odd), .schedule-table tr:nth-child(odd) { background: rgba(255,255,255,0.03); }
+    .leaderboard tr:hover, .schedule-table tr:hover { background: rgba(230,0,122,0.12); }
     .rank-1 { color: #ffd700; text-shadow: 1px 1px 0px #000; font-size: 1.3rem; }
     .back-link {
         display: inline-flex;
@@ -58,32 +63,72 @@
     </div>
 </div>
 
-<div class="dangan-box" style="background: rgba(15,15,15,0.9); border-color: rgba(230,0,122,0.85);">
-    <h2 style="color: var(--danger); margin-top: 0;">ТАБЛИЦА ЛИДЕРОВ</h2>
-    <table class="leaderboard">
-        <thead>
-            <tr>
-                <th>Место</th>
-                <th>Игрок</th>
-                <th>Очки</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if results %}
-                {% for result in results %}
+<div class="grid-two">
+    <div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
+        <h2 style="color: var(--danger); margin-top: 0;">Результаты по этапам</h2>
+        <table class="leaderboard">
+            <thead>
                 <tr>
-                    <td class="{% if loop.index == 1 %}rank-1{% endif %}">#{{ loop.index }}</td>
-                    <td><b>{{ result.player_name }}</b></td>
-                    <td>{{ result.score }}</td>
+                    <th>Этап</th>
+                    <th>Матч</th>
+                    <th>Команда / Участник</th>
+                    <th>Очки</th>
+                    <th>Примечание</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if scores %}
+                    {% for result in scores %}
+                    <tr>
+                        <td>{{ result.stage or 'Общий' }}</td>
+                        <td>{{ result.match_title or '—' }}</td>
+                        <td>
+                            {% if result.team %}{{ result.team.name }}{% endif %}
+                            {% if result.participant %}
+                                {{ result.participant.name }}{% if result.team %} ({{ result.team.name }}){% endif %}
+                            {% endif %}
+                            {% if not result.team and not result.participant %}Результат без привязки{% endif %}
+                        </td>
+                        <td>{{ result.score }}</td>
+                        <td>{{ result.notes or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #ddd;">Результатов пока нет. Добавьте их в админке.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
+        <h2 style="color: var(--danger); margin-top: 0;">Расписание турнира</h2>
+        {% if schedule_items %}
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th>Время</th>
+                    <th>Матч</th>
+                    <th>Локация</th>
+                    <th>Описание</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in schedule_items %}
+                <tr>
+                    <td>{{ item.time }}</td>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.location or '—' }}</td>
+                    <td>{{ item.description or '—' }}</td>
                 </tr>
                 {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="3" style="text-align: center; color: #ddd;">Результатов пока нет. Станьте первым!</td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:#ddd;">Расписание пока не заполнено. Добавьте матчи в админке.</p>
+        {% endif %}
+    </div>
 </div>
 
 <a href="/" class="back-link">❮ Назад к списку игр</a>

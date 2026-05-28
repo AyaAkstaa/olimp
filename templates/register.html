@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .register-panel {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(360px, 1fr);
+        gap: 32px;
+        align-items: center;
+        margin-top: 28px;
+    }
+    .register-card {
+        background: rgba(15,15,15,0.96);
+        border: 2px solid rgba(230,0,122,0.65);
+        padding: 30px;
+    }
+    .register-card h1 {
+        margin: 0 0 16px;
+        font-size: 2.2rem;
+        color: var(--white);
+    }
+    .register-card p {
+        color: #ddd;
+        line-height: 1.7;
+        margin-bottom: 24px;
+    }
+    .register-form {
+        display: grid;
+        gap: 16px;
+    }
+    .register-form label {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #fff;
+        font-size: 0.95rem;
+    }
+    .register-form input {
+        padding: 14px;
+        border: 2px solid rgba(230,0,122,0.75);
+        background: #121212;
+        color: #fff;
+    }
+    .register-form button {
+        margin-top: 8px;
+        padding: 16px;
+        border: none;
+        background: var(--danger);
+        color: var(--black);
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+    .register-result {
+        margin-top: 16px;
+        padding: 18px;
+        border: 1px solid rgba(230,0,122,0.5);
+        background: rgba(230,0,122,0.08);
+        color: #fff;
+    }
+    .register-image {
+        display: flex;
+        justify-content: center;
+    }
+    .register-image img {
+        width: min(100%, 420px);
+        transform: rotate(-6deg);
+        border: 6px solid rgba(255,255,255,0.15);
+        background: #111;
+    }
+    @media (max-width: 860px) {
+        .register-panel { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="register-panel">
+    <div class="register-card">
+        <h1>Заявка команды</h1>
+        <p>Добавьте название команды и первого участника. После этого администратор сможет добавить вас в общие таблицы и расписание.</p>
+        <form action="/register" method="POST" class="register-form">
+            <label>Название команды</label>
+            <input type="text" name="team_name" placeholder="Команда Отчаяния" required>
+
+            <label>Имя участника</label>
+            <input type="text" name="participant_name" placeholder="Имя Таланта" required>
+
+            <button type="submit">Отправить заявку</button>
+        </form>
+        {% if message %}
+        <div class="register-result">{{ message }}</div>
+        {% endif %}
+    </div>
+    <div class="register-image">
+        <img src="https://static.wikia.nocookie.net/danganronpa/images/5/51/Monokuma.png" alt="Monokuma">
+    </div>
+</div>
+{% endblock %}
