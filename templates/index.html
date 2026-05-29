@@ -298,7 +298,7 @@
     <div class="carousel-section">
         <div class="games-carousel">
             {% for game in games %}
-            <a href="/game/{{ game.slug }}" class="game-card" style="background-image: url('/static/main/{{ game_assets[game.slug] }}');" title="{{ game.name }}">
+            <a href="/game/{{ game.slug }}" class="game-card" style="background-image: url('/static/Карточки/{{ game_assets[game.slug] }}');" title="{{ game.name }}">
                 <div class="game-card-overlay">
                     <div class="game-id">0{{ loop.index }}</div>
                     <h3 class="game-title">{{ game.name }}</h3>
