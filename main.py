@@ -1,5 +1,5 @@
-﻿from fastapi import FastAPI, Request, Form, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, StreamingResponse, JSONResponse
+﻿from fastapi import FastAPI, Request, Form, Depends, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
@@ -139,6 +139,8 @@ env = Environment(
     cache_size=0,
 )
 
+BASE_DIR = Path(__file__).resolve().parent
+
 
 def render_template(name: str, **context):
     template = env.get_template(name)
@@ -261,7 +263,7 @@ def schedule_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return render_template("register.html", request=request, message=None)
+    return RedirectResponse(url="https://forms.yandex.ru/u/6a0cbcd884227c3869ab7608", status_code=303)
 
 
 @app.post("/register")
@@ -749,87 +751,33 @@ def admin_round_robin_save(game_id: int = Form(...), match_key: str = Form(...),
         rec = RoundRobinMatch(game_id=game_id, match_key=match_key, team_a_id=team_a_id if team_a_id else None, team_b_id=team_b_id if team_b_id else None, score_a=score_a_val, score_b=score_b_val)
         db.add(rec)
     db.commit()
-    # debug logging to help verify saved values
-    try:
-        saved = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game_id, RoundRobinMatch.match_key == match_key).first()
-        print(f"[RR_SAVE] game={game_id} key={match_key} team_a={team_a_id} team_b={team_b_id} score_a={score_a_val} score_b={score_b_val} -> saved id={getattr(saved,'id',None)} team_a={getattr(saved,'team_a_id',None)} team_b={getattr(saved,'team_b_id',None)} score_a={getattr(saved,'score_a',None)} score_b={getattr(saved,'score_b',None)}")
-    except Exception as e:
-        print("[RR_SAVE] logging failed:", e)
-    return {"status": "ok"}
+    return RedirectResponse(url="/admin", status_code=303)
 
 
-@app.get("/admin/download_all")
-def download_all(request: Request, db: Session = Depends(get_db)):
-    # require admin cookie/token
-    cookie_user = request.cookies.get("admin_user")
-    cookie_token = request.cookies.get("admin_token")
-    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
-        return RedirectResponse(url="/login", status_code=303)
+@app.post("/admin/add_round_match")
+def add_round_match(round_id: int = Form(...), player_a_id: int = Form(...), player_b_id: int = Form(...), score_a: int = Form(0), score_b: int = Form(0), notes: str = Form(""), db: Session = Depends(get_db)):
+    # create match record
+    rm = RoundMatch(round_id=round_id, player_a_id=player_a_id, player_b_id=player_b_id, score_a=score_a, score_b=score_b, notes=notes.strip())
+    db.add(rm)
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
 
-    # Create CSV content with all data
-    output = io.StringIO()
-    
-    # Write teams
-    output.write("=== КОМАНДЫ ===\n")
-    output.write("ID,Название\n")
-    teams = db.query(Team).order_by(Team.name).all()
-    for team in teams:
-        output.write(f"{team.id},{team.name}\n")
-    output.write("\n")
-    
-    # Write participants
-    output.write("=== УЧАСТНИКИ ===\n")
-    output.write("ID,Имя,Команда\n")
-    participants = db.query(Participant).order_by(Participant.name).all()
-    for p in participants:
-        team_name = p.team.name if p.team else "—"
-        output.write(f"{p.id},{p.name},{team_name}\n")
-    output.write("\n")
-    
-    # Write scores
-    output.write("=== РЕЗУЛЬТАТЫ ===\n")
-    output.write("Игра,Этап,Команда,Участник,Очки,Примечание\n")
-    scores = db.query(Score).order_by(Score.game_id, Score.stage, Score.match_title).all()
-    for score in scores:
-        game_name = score.game.name if score.game else "—"
-        stage = score.stage or "Общий"
-        team_name = score.team.name if score.team else "—"
-        participant_name = score.participant.name if score.participant else "—"
-        notes = (score.notes or "").replace("\n", " ")
-        # Escape commas and quotes in CSV
-        output.write(f'"{game_name}","{stage}","{team_name}","{participant_name}",{score.score},"{notes}"\n')
-    output.write("\n")
-    
-    # Write schedule
-    output.write("=== РАСПИСАНИЕ ===\n")
-    output.write("Игра,Время,Матч,Локация,Описание\n")
-    schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time).all()
-    for item in schedule_items:
-        game_name = item.game.name if item.game else "—"
-        location = item.location or "—"
-        description = (item.description or "").replace("\n", " ")
-        output.write(f'"{game_name}","{item.time}","{item.title}","{location}","{description}"\n')
-    output.write("\n")
-    
-    # Write round robin matches
-    output.write("=== КРУГОВИК ===\n")
-    output.write("Игра,Команда A,Очки A,Команда B,Очки B\n")
-    rr_matches = db.query(RoundRobinMatch).order_by(RoundRobinMatch.game_id).all()
-    for match in rr_matches:
-        game_name = match.game.name if match.game else "—"
-        team_a_name = match.team_a.name if match.team_a else "—"
-        team_b_name = match.team_b.name if match.team_b else "—"
-        score_a = match.score_a if match.score_a is not None else "—"
-        score_b = match.score_b if match.score_b is not None else "—"
-        output.write(f'"{game_name}","{team_a_name}",{score_a},"{team_b_name}",{score_b}\n')
-    
-    # Generate filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"olympiad_export_{timestamp}.csv"
-    
-    # Return as file download
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+
+@app.get("/round/{round_id}", response_class=HTMLResponse)
+def view_round(request: Request, round_id: int, db: Session = Depends(get_db)):
+    r = db.query(Round).filter(Round.id == round_id).first()
+    if not r:
+        return RedirectResponse(url="/admin", status_code=303)
+    # get players
+    players = db.query(RoundPlayer).filter(RoundPlayer.round_id == round_id).all()
+    matches = db.query(RoundMatch).filter(RoundMatch.round_id == round_id).all()
+
+    # build matrix dictionary for quick lookup
+    matrix = {}
+    for m in matches:
+        a = m.player_a_id
+        b = m.player_b_id
+        matrix_key = f"{min(a,b)}_{max(a,b)}"
+        matrix[matrix_key] = m
+
+    return render_template("round.html", request=request, round=r, players=players, matrix=matrix)

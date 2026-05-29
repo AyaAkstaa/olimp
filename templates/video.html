@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .video-page-wrapper {
+        position: fixed;
+        inset: 0;
+        background-color: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .video-player {
+        width: 100%;
+        max-width: 1200px;
+        max-height: 85vh;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+        outline: none;
+        border-radius: 8px;
+    }
+</style>
+
+<div class="video-page-wrapper">
+    <video class="video-player" controls autoplay playsinline>
+        <source src="/api/video" type="video/mp4">
+        Ваш браузер не поддерживает встроенные видео.
+    </video>
+</div>
+
+<script>
+    // Дополнительно: можно автоматически развернуть на весь экран при старте
+    const player = document.querySelector('.video-player');
+    
+    player.addEventListener('play', () => {
+        // Если хочешь авто-фуллскрин, расскомментируй строку ниже:
+        player.requestFullscreen().catch(() => {});
+    });
+</script>
+{% endblock %}

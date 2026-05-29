@@ -43,6 +43,7 @@
         max-width: 850px;
         height: auto;
         display: block;
+        margin-left: 50px;
         filter: drop-shadow(0 12px 40px rgba(0,0,0,0.4));
         transform-style: preserve-3d;
         transition: transform 0.1s ease-out;
@@ -57,8 +58,8 @@
     }
     .monokuma-giant {
         display: block;
-        width: 130%;
-        max-width: 1000px;
+        width: 100%;
+        max-width: 800px;
         height: auto;
         cursor: pointer;
         transition: transform 0.25s ease;
@@ -71,33 +72,48 @@
         transform: scale(1.03);
     }
     
-    /* Анимированная предупредительная лента */
+    /* Анимированная предупредительная лента без швов */
     .diagonal-section {
         position: fixed;
-        bottom: -32px;
+        bottom: -25px;
         left: -5vw;
         right: -5vw;
         z-index: 4;
-        height: 420px;
-        background: repeating-linear-gradient(
+        height: 410px;
+        
+        /* Используем обычный градиент, разбитый по 25% для идеального тайлинга */
+        background-image: linear-gradient(
             -45deg,
-            #8b6b15 0px,
-            #8b6b15 40px,
-            #161616 40px,
-            #161616 80px
+            #161616 25%,
+            #8b6b15 25%,
+            #8b6b15 50%,
+            #161616 50%,
+            #161616 75%,
+            #8b6b15 75%,
+            #8b6b15 100%
         );
+        /* Задаем жесткий размер одного квадрата паттерна (целое число!) */
+        background-size: 100px 100px; 
+        
         transform: skewY(-2.5deg);
         transform-origin: left bottom;
         box-shadow: inset 0 80px 150px rgba(0,0,0,0.85), 
                     inset 0 -40px 100px rgba(0,0,0,0.7),
                     0 -30px 100px rgba(0,0,0,0.8);
-        animation: scrollTape 12s linear infinite;
+        
+        /* Оптимальная скорость для целого смещения */
+        animation: scrollTape 4s linear infinite;
         pointer-events: none;
     }
 
     @keyframes scrollTape {
-        0% { background-position: 0px 0px; }
-        100% { background-position: 113.137px 0px; }
+        0% { 
+            background-position: 0px 0px; 
+        }
+        100% { 
+            /* Смещение СТРОГО равно размеру background-size (100px) */
+            background-position: 100px 0px; 
+        }
     }
 
     .carousel-section {
@@ -129,9 +145,9 @@
     /* Карточки */
     .game-card {
         flex: 0 0 auto;
-        width: 300px; 
-        height: 400px;
-        background-size: cover;
+        width: 330px; 
+        height: 450px;
+        background-size: contain;
         background-position: center;
         background-repeat: no-repeat;
         background-color: transparent;
@@ -141,7 +157,7 @@
         text-decoration: none;
         margin-bottom: -40px;
         
-        margin-left: -50px;
+        margin-left: -80px;
         
         /* Затемнение и тень делаем только через filter, он уважает прозрачность PNG */
         filter: brightness(0.7) drop-shadow(0 15px 25px rgba(0,0,0,0.6));
@@ -310,6 +326,7 @@
 </div>
 
 <script>
+    
     const titleImg = document.querySelector('.hero-title-img');
     const gameCards = document.querySelectorAll('.game-card');
     const clamp = v => Math.max(-12, Math.min(12, v));
@@ -317,6 +334,11 @@
     let mouseX = 0, mouseY = 0;
     let titleRect = null;
     let rafId = null;
+    let firstMessage = true;
+    let monokumaClicks = 0;
+
+    const hoverSound = new Audio('/static/main/hover.mp3');
+    hoverSound.volume = 0.2; // Громкость от 0.0 до 1.0 (лучше делать тихим)
 
     if (titleImg) {
         titleImg.style.transformStyle = 'preserve-3d';
@@ -356,6 +378,14 @@
 
     gameCards.forEach((card, index) => {
         card.addEventListener('mouseenter', () => {
+            // --- ДОБАВЛЕНО ДЛЯ ЗВУКА ---
+            // Сбрасываем время на 0, чтобы звук проигрывался заново, если быстро водить мышкой
+            hoverSound.currentTime = 0; 
+            // play() возвращает Promise, ловим ошибку, если браузер блокирует автоплей до первого клика по сайту
+            hoverSound.play().catch(error => {
+                console.log("Браузер заблокировал звук до взаимодействия с пользователем");
+            });
+            // ---------------------------
             if (index > 0) {
                 gameCards[index-1].classList.add('neighbor-prev');
             }
@@ -379,19 +409,27 @@
     // База фраз. Добавляй свои тексты и указывай нужный спрайт
     const monokumaMessages = [
         { 
-            text: "Пу-ху-ху! Добро пожаловать!", 
+            text: "ХВАТИТ МЕНЯ ТРОГАТЬ!!", 
+            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+        },
+        { 
+            text: "Руки убрал", 
+            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+        },
+        { 
+            text: "Куда я жмав", 
             sprite: defaultSprite 
         },
         { 
-            text: "Редиректа не будет, только отчаяние!", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+            text: "Если нажать 100 раз, то будет мультик", 
+            sprite: defaultSprite 
         },
         { 
-            text: "Ну и чё...", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+            text: "Парень...", 
+            sprite: defaultSprite 
         },
         { 
-            text: "Время наказания приближается!", 
+            text: "Отстань", 
             sprite: defaultSprite 
         }
     ];
@@ -400,8 +438,21 @@
 
     if (monokumaInteract) {
         monokumaInteract.addEventListener('click', () => {
-            // 1. Выбираем случайную фразу
-            const randomMsg = monokumaMessages[Math.floor(Math.random() * monokumaMessages.length)];
+            monokumaClicks += 1;
+            let randomMsg = monokumaMessages[0];
+            if (firstMessage) {
+                randomMsg = { 
+                    text: "Пу-ху-ху! Добро пожаловать!", 
+                    sprite: defaultSprite 
+                };
+                firstMessage = false;
+            }
+            else if (monokumaClicks == 100) {
+                window.location.href = "/watch";
+            }
+            else {
+                randomMsg = monokumaMessages[Math.floor(Math.random() * monokumaMessages.length)];
+            }
             
             // 2. Устанавливаем текст
             monokumaText.textContent = randomMsg.text;
