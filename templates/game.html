@@ -2,6 +2,25 @@
 
 {% block content %}
 <style>
+     .full-viewport {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background-image: url('/static/main/МакетГлавной_фон.png');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        position: relative;
+        overflow: hidden;
+    }
+    .full-viewport::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(0,0,0,0.15), rgba(0,0,0,0.08));
+        pointer-events: none;
+        z-index: 1;
+    }
     .game-header { margin-bottom: 32px; }
     .game-subtitle {
         color: var(--danger);
@@ -28,13 +47,14 @@
         margin-bottom: 24px;
     }
     .leaderboard, .schedule-table {
-        width: 100%;
+        width: 95%;
         border-collapse: collapse;
         margin-top: 24px;
         background: rgba(255,255,255,0.04);
         color: #f7f7f7;
         border: 2px solid rgba(230,0,122,0.65);
         backdrop-filter: blur(2px);
+        margin: 0 auto;
     }
     .leaderboard th, .schedule-table th {
         background: rgba(230,0,122,0.95);
@@ -88,6 +108,7 @@
     }
 </style>
 
+<div class="full-viewport">
 <div class="game-header">
     <div class="game-subtitle">Игра в центре внимания</div>
     <h1 class="title-splash">{{ game.name }}</h1>
@@ -115,6 +136,9 @@
 
 <div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
     <h2 style="color: var(--danger); margin-top: 0;">Круговик</h2>
+    {% if is_admin and game.slug == 'geoguessr' %}
+    <a href="/admin/round_robin" style="display:inline-block; background:#e60078; padding:10px 20px; border:none; color:#fff; text-decoration:none; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать круговик</a>
+    {% endif %}
     {% if game.slug == 'geoguessr' and rr_teams and rr_teams|length > 0 %}
     <table class="rr-table" style="margin-top:8px;">
         <thead>
@@ -133,19 +157,25 @@
                     {% if row_team.id == col_team.id %}
                         <td>✕</td>
                     {% else %}
-                        {% set key1 = row_team.id|string ~ '_' ~ col_team.id|string %}
-                        {% set key2 = col_team.id|string ~ '_' ~ row_team.id|string %}
-                        {% set m = rr_matrix.get(key1) or rr_matrix.get(key2) %}
+                        {% set a_id = row_team.id %}
+                        {% set b_id = col_team.id %}
+                        {% set key = (a_id if a_id < b_id else b_id)|string ~ '_' ~ (b_id if a_id < b_id else a_id)|string %}
+                        {% set m = rr_matrix.get(key) %}
                         {% if m %}
-                            {% if m.team_a_id == row_team.id %}
-                                {% set raw = m.score_a %}
-                            {% else %}
-                                {% set raw = m.score_b %}
-                            {% endif %}
-                            <td>{{ raw if raw is not none else '—' }}</td>
+                            {% set score_a = m.score_a %}
+                            {% set score_b = m.score_b %}
                         {% else %}
-                            <td>—</td>
+                            {% set score_a = None %}
+                            {% set score_b = None %}
                         {% endif %}
+                        {% if a_id < b_id %}
+                            {% set side = 'a' %}
+                        {% else %}
+                            {% set side = 'b' %}
+                        {% endif %}
+                        <td>
+                            <div class="rr-editable" data-match-key="{{ key }}" data-team-a="{{ (a_id if a_id < b_id else b_id) }}" data-team-b="{{ (b_id if a_id < b_id else a_id) }}" data-side="{{ side }}" data-score="{{ (score_a if side == 'a' else score_b) if (score_a is not none or score_b is not none) else '' }}">{{ (score_a if side == 'a' else score_b) if (score_a is not none or score_b is not none) else '—' }}</div>
+                        </td>
                     {% endif %}
                 {% endfor %}
             </tr>
@@ -163,10 +193,10 @@
     {% if is_admin and game.slug == 'geoguessr' %}
     <div style="margin-bottom: 16px;">
         <button id="editTableBtn" type="button" style="background:#e60078; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать</button>
-        <button id="addRowBtn" type="button" style="display:none; background:#0066cc; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Добавить строку</button>
-        <button id="loadAllBtn" type="button" style="display:none; background:#0066cc; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Загрузить всех</button>
         <button id="saveTableBtn" type="button" style="display:none; background:#28a745; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Сохранить</button>
         <button id="cancelTableBtn" type="button" style="display:none; background:#333; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Отменить</button>
+        <button id="addRowBtn" type="button" style="background:#ffd9b3; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:12px;">+ Строка</button>
+        <button id="downloadAllBtn" type="button" style="background:#e6e6e6; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:6px;">Загрузить все</button>
     </div>
     {% endif %}
     
@@ -177,7 +207,7 @@
                     <th>Команда</th>
                     <th>Игрок</th>
                     <th>Очки</th>
-                    {% if is_admin %}<th></th>{% endif %}
+                    {% if is_admin %}<th>Действия</th>{% endif %}
                 {% else %}
                     <th>Этап</th>
                     <th>Команда / Участник</th>
@@ -197,7 +227,9 @@
                             <span class="score-display">{{ result.score }}</span>
                             <input type="number" class="score-input" value="{{ result.score }}" style="display:none; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;">
                         </td>
-                        {% if is_admin %}<td class="delete-cell" style="text-align:center;"><button type="button" class="delete-row-btn" style="display:none; background:#dc3545; padding:4px 10px; border:none; color:#fff; cursor:pointer; border-radius:3px; font-size:0.9rem;">×</button></td>{% endif %}
+                        {% if is_admin %}
+                        <td><button type="button" class="delete-row-btn" data-score-id="{{ result.id }}" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>
+                        {% endif %}
                     {% else %}
                         <td>{{ result.stage or 'Общий' }}</td>
                         <td>
@@ -248,7 +280,7 @@
                 {% set _ = totals.data.update({team_name: current + match.score_b}) %}
             {% endif %}
         {% endfor %}
-        <table class="leaderboard">
+        <table class="leaderboard" id="team-totals-table">
             <thead>
                 <tr>
                     <th>Команда</th>
@@ -274,249 +306,499 @@
     {% endif %}
 
 <a href="/" class="back-link">❮ Назад к списку игр</a>
-
+</div>
 {% if is_admin and game.slug == 'geoguessr' %}
 <script>
-    var gameId = {{ game.id }};
-    var allTeams = {{ all_teams | tojson }};
-    var allParticipants = {{ all_participants | tojson }};
-    
-    // Convert lists to arrays of {id, name}
-    var teamsList = allTeams.map(function(t) { return {id: t.id, name: t.name}; });
-    var participantsList = allParticipants.map(function(p) { return {id: p.id, name: p.name, team_name: p.team ? p.team.name : ''}; });
-
-    (function() {
+    (function(){
+        var GAME_ID = {{ game.id }};
         var editBtn = document.getElementById('editTableBtn');
-        var addRowBtn = document.getElementById('addRowBtn');
-        var loadAllBtn = document.getElementById('loadAllBtn');
         var saveBtn = document.getElementById('saveTableBtn');
         var cancelBtn = document.getElementById('cancelTableBtn');
-        var table = document.getElementById('geoguessr-table');
-        var tbody = table.querySelector('tbody');
-        var isEditing = false;
-        var newRows = [];
+        var scoresTable = document.getElementById('geoguessr-table');
+        var rrCells = Array.from(document.querySelectorAll('.rr-editable'));
 
-        if (!editBtn || !table) return;
+        if (!editBtn) return;
 
-        editBtn.addEventListener('click', function() {
-            isEditing = true;
-            editBtn.style.display = 'none';
-            addRowBtn.style.display = 'inline-block';
-            loadAllBtn.style.display = 'inline-block';
-            saveBtn.style.display = 'inline-block';
-            cancelBtn.style.display = 'inline-block';
-
-            // Show all inputs and hide spans, show delete buttons
-            table.querySelectorAll('.score-cell').forEach(function(cell) {
-                var span = cell.querySelector('.score-display');
-                var input = cell.querySelector('.score-input');
-                if (span) span.style.display = 'none';
-                if (input) input.style.display = 'inline-block';
-            });
-            table.querySelectorAll('.delete-row-btn').forEach(function(btn) {
-                btn.style.display = 'inline-block';
-            });
-            attachDeleteHandlers();
-        });
-
-        function attachDeleteHandlers() {
-            table.querySelectorAll('.delete-row-btn').forEach(function(btn) {
-                btn.onclick = function(e) {
-                    e.preventDefault();
-                    var row = btn.closest('tr');
-                    row.remove();
-                    if (!row.dataset.scoreId || row.dataset.scoreId.startsWith('new-')) {
-                        newRows = newRows.filter(function(r) { return r !== row; });
-                    }
-                };
+        if (scoresTable) {
+            scoresTable.addEventListener('click', function(event) {
+                var deleteRowBtn = event.target.closest('.delete-row-btn');
+                if (deleteRowBtn && scoresTable.contains(deleteRowBtn)) {
+                    var scoreId = deleteRowBtn.dataset.scoreId;
+                    if (!scoreId) return;
+                    var form = new FormData();
+                    form.append('score_id', scoreId);
+                    fetch('/admin/delete_score', { method: 'POST', body: form })
+                        .then(function(){ location.reload(); })
+                        .catch(function(){ alert('Ошибка при удалении строки'); });
+                    return;
+                }
+                var inlineDeleteBtn = event.target.closest('.inline-delete');
+                if (inlineDeleteBtn && scoresTable.contains(inlineDeleteBtn)) {
+                    var row = inlineDeleteBtn.closest('tr');
+                    if (row) row.remove();
+                    return;
+                }
+                var scoreTd = event.target.closest('.score-cell');
+                if (scoreTd && scoresTable.contains(scoreTd) && editMode) {
+                    scoreCellClick({ currentTarget: scoreTd });
+                }
             });
         }
 
-        cancelBtn.addEventListener('click', function() {
-            isEditing = false;
-            editBtn.style.display = 'inline-block';
-            addRowBtn.style.display = 'none';
-            loadAllBtn.style.display = 'none';
-            saveBtn.style.display = 'none';
-            cancelBtn.style.display = 'none';
-
-            // Remove new rows
-            newRows.forEach(function(row) { row.remove(); });
-            newRows = [];
-
-            // Reset all inputs and show spans, hide delete buttons
-            table.querySelectorAll('.score-cell').forEach(function(cell) {
-                var span = cell.querySelector('.score-display');
-                var input = cell.querySelector('.score-input');
-                input.value = cell.dataset.original;
-                if (span) span.style.display = 'inline';
-                if (input) input.style.display = 'none';
+        var editMode = false;
+        var scoreChanges = {}; // id -> score
+        var rrChanges = {}; // match_key -> { a: val, b: val }
+        var ALL_TEAMS = [
+            {% for t in teams %}
+            { id: {{ t.id }}, name: {{ t.name | tojson }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        var ALL_PARTICIPANTS = [
+            {% for p in participants %}
+            { id: {{ p.id }}, name: {{ p.name | tojson }}, team_id: {{ p.team.id if p.team else 0 }}, team_name: {{ p.team.name | tojson if p.team else '""' }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        function buildTeamOptions(selectedId) {
+            var html = '<option value="0">— без команды —</option>';
+            ALL_TEAMS.forEach(function(team){
+                html += '<option value="' + team.id + '"' + (team.id === selectedId ? ' selected' : '') + '>' + escapeHtml(team.name) + '</option>';
             });
-            table.querySelectorAll('.delete-row-btn').forEach(function(btn) {
-                btn.style.display = 'none';
+            html += '<option value="__new">— создать новую —</option>';
+            return html;
+        }
+        function buildParticipantOptions(selectedId) {
+            var html = '<option value="0">— без участника —</option>';
+            ALL_PARTICIPANTS.forEach(function(part){
+                var label = escapeHtml(part.name) + (part.team_name ? ' (' + escapeHtml(part.team_name) + ')' : '');
+                html += '<option value="' + part.id + '"' + (part.id === selectedId ? ' selected' : '') + '>' + label + '</option>';
             });
-        });
-
-        addRowBtn.addEventListener('click', function() {
-            var newRow = document.createElement('tr');
-            newRow.dataset.scoreId = 'new-' + Date.now();
-            newRow.innerHTML = '<td><select class="team-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите команду —</option></select></td><td><select class="participant-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите участника —</option></select></td><td class="score-cell" data-original="0"><input type="number" class="score-input" value="0" style="display:inline-block; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"></td><td class="delete-cell" style="text-align:center;"><button type="button" class="delete-row-btn" style="background:#dc3545; padding:4px 10px; border:none; color:#fff; cursor:pointer; border-radius:3px; font-size:0.9rem;">×</button></td>';
-            
-            // Populate team select
-            var teamSelect = newRow.querySelector('.team-select');
-            teamsList.forEach(function(team) {
-                var opt = document.createElement('option');
-                opt.value = team.id;
-                opt.textContent = team.name;
-                teamSelect.appendChild(opt);
-            });
-            
-            // Populate participant select
-            var participantSelect = newRow.querySelector('.participant-select');
-            participantsList.forEach(function(p) {
-                var opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.name + (p.team_name ? ' (' + p.team_name + ')' : '');
-                participantSelect.appendChild(opt);
-            });
-
-            tbody.appendChild(newRow);
-            newRows.push(newRow);
-            attachDeleteHandlers();
-        });
-
-        loadAllBtn.addEventListener('click', function() {
-            // Get existing participants in table
-            var existingIds = new Set();
-            table.querySelectorAll('tr[data-score-id]').forEach(function(row) {
-                var participantCell = row.cells[1];
-                if (participantCell) {
-                    participantsList.forEach(function(p) {
-                        if (participantCell.textContent.includes(p.name)) {
-                            existingIds.add(p.id);
-                        }
-                    });
+            html += '<option value="__new">— создать нового —</option>';
+            return html;
+        }
+        function createInlineRow(teamId, participantId, scoreValue) {
+            var tr = document.createElement('tr');
+            tr.className = 'new-inline-row';
+            tr.innerHTML = `
+                <td>
+                    <select class="inline-team-select">${buildTeamOptions(teamId)}</select>
+                    <input type="text" class="inline-team-new" placeholder="Новое название команды" style="display:none; margin-top:6px; width:95%;">
+                </td>
+                <td>
+                    <select class="inline-part-select">${buildParticipantOptions(participantId)}</select>
+                    <input type="text" class="inline-part-new" placeholder="Имя нового участника" style="display:none; margin-top:6px; width:95%;">
+                </td>
+                <td>
+                    <input type="number" class="inline-score" value="${scoreValue != null ? escapeHtml(scoreValue) : '0'}" style="width:80px;">
+                </td>
+                <td>
+                    <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                        <button class="inline-save" type="button">Сохранить</button>
+                        <button class="inline-cancel" type="button">Отмена</button>
+                        <button class="inline-delete" type="button" style="background:#c62828;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;">Удалить</button>
+                    </div>
+                </td>
+                `;
+            var teamSel = tr.querySelector('.inline-team-select');
+            var teamNew = tr.querySelector('.inline-team-new');
+            var partSel = tr.querySelector('.inline-part-select');
+            var partNew = tr.querySelector('.inline-part-new');
+            var scoreInp = tr.querySelector('.inline-score');
+            var saveBtn = tr.querySelector('.inline-save');
+            var cancelBtn = tr.querySelector('.inline-cancel');
+            var deleteBtn = tr.querySelector('.inline-delete');
+            teamSel.addEventListener('change', function(){ teamNew.style.display = teamSel.value === '__new' ? 'block' : 'none'; });
+            partSel.addEventListener('change', function(){ partNew.style.display = partSel.value === '__new' ? 'block' : 'none'; });
+            cancelBtn.addEventListener('click', function(){ tr.remove(); });
+            deleteBtn.addEventListener('click', function(){ tr.remove(); });
+            saveBtn.addEventListener('click', function(){
+                var team_val = teamSel.value;
+                var participant_val = partSel.value;
+                var payload = { game_id: GAME_ID, score: scoreInp.value };
+                if (team_val === '__new') {
+                    var tn = teamNew.value.trim();
+                    if (!tn) { alert('Введите название команды'); return; }
+                    payload.team_name = tn;
+                } else if (team_val && team_val !== '0') {
+                    payload.team_id = team_val;
                 }
-            });
-
-            // Add missing participants
-            participantsList.forEach(function(p) {
-                if (!existingIds.has(p.id)) {
-                    var newRow = document.createElement('tr');
-                    newRow.dataset.scoreId = 'new-' + Date.now() + '-' + p.id;
-                    newRow.innerHTML = '<td><select class="team-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите команду —</option></select></td><td><select class="participant-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите участника —</option></select></td><td class="score-cell" data-original="0"><input type="number" class="score-input" value="0" style="display:inline-block; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"></td><td class="delete-cell" style="text-align:center;"><button type="button" class="delete-row-btn" style="background:#dc3545; padding:4px 10px; border:none; color:#fff; cursor:pointer; border-radius:3px; font-size:0.9rem;">×</button></td>';
-                    
-                    var teamSelect = newRow.querySelector('.team-select');
-                    teamsList.forEach(function(team) {
-                        var opt = document.createElement('option');
-                        opt.value = team.id;
-                        opt.textContent = team.name;
-                        if (p.team_name && team.name === p.team_name) {
-                            opt.selected = true;
-                        }
-                        teamSelect.appendChild(opt);
-                    });
-                    
-                    var participantSelect = newRow.querySelector('.participant-select');
-                    participantsList.forEach(function(pt) {
-                        var opt = document.createElement('option');
-                        opt.value = pt.id;
-                        opt.textContent = pt.name + (pt.team_name ? ' (' + pt.team_name + ')' : '');
-                        if (pt.id === p.id) {
-                            opt.selected = true;
-                        }
-                        participantSelect.appendChild(opt);
-                    });
-
-                    tbody.appendChild(newRow);
-                    newRows.push(newRow);
+                if (participant_val === '__new') {
+                    var pn = partNew.value.trim();
+                    if (!pn) { alert('Введите имя участника'); return; }
+                    payload.participant_name = pn;
+                } else if (participant_val && participant_val !== '0') {
+                    payload.participant_id = participant_val;
                 }
+                fetch('/admin/add_score_inline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                    .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); })
+                    .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка: ' + (j && j.error ? j.error : 'unknown')); })
+                    .catch(function(e){ console.error(e); alert('Ошибка при добавлении строки'); });
             });
-            attachDeleteHandlers();
-        });
-
-        saveBtn.addEventListener('click', function() {
-            var updates = [];
-            var creates = [];
-
-            // Collect updates to existing rows
-            table.querySelectorAll('tr[data-score-id]').forEach(function(row) {
-                var scoreId = row.dataset.scoreId;
-                if (scoreId && !scoreId.startsWith('new-')) {
-                    var input = row.querySelector('.score-input');
-                    if (input) {
-                        var newValue = input.value;
-                        var original = row.querySelector('.score-cell').dataset.original;
-                        if (newValue !== original) {
-                            updates.push({ id: scoreId, score: newValue });
-                        }
-                    }
-                }
-            });
-
-            // Collect new rows
-            newRows.forEach(function(row) {
-                var teamSelect = row.querySelector('.team-select');
-                var participantSelect = row.querySelector('.participant-select');
-                var scoreInput = row.querySelector('.score-input');
-                if (teamSelect && participantSelect && scoreInput) {
-                    creates.push({
-                        game_id: gameId,
-                        stage: 'Все против всех',
-                        team_id: parseInt(teamSelect.value) || 0,
-                        participant_id: parseInt(participantSelect.value) || 0,
-                        score: parseInt(scoreInput.value) || 0,
-                        notes: ''
-                    });
-                }
-            });
-
-            // Send updates
-            var promises = updates.map(function(update) {
-                var formData = new FormData();
-                formData.append('score_id', update.id);
-                formData.append('score', update.score);
-                
-                return fetch('/admin/update_score', {
-                    method: 'POST',
-                    body: formData
+            return tr;
+        }
+        function parseRowScore(row) {
+            var scoreCell = row.querySelector('.score-cell');
+            if (scoreCell) {
+                var text = scoreCell.dataset.original || scoreCell.textContent || '';
+                var n = parseFloat(String(text).replace(',', '.'));
+                return isNaN(n) ? -Infinity : n;
+            }
+            var input = row.querySelector('.inline-score');
+            if (input) {
+                var n = parseFloat(input.value);
+                return isNaN(n) ? 0 : n;
+            }
+            return 0;
+        }
+        function sortScoreTable() {
+            if (!scoresTable) return;
+            var tbody = scoresTable.querySelector('tbody');
+            if (!tbody) return;
+            var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row){ return row.querySelector('td'); });
+            rows.sort(function(a, b){ return parseRowScore(b) - parseRowScore(a); });
+            rows.forEach(function(row){ tbody.appendChild(row); });
+        }
+        function attachDeleteButtons() {
+            if (!scoresTable) return;
+            scoresTable.querySelectorAll('.delete-row-btn').forEach(function(btn){
+                if (btn.dataset.deleteAttached) return;
+                btn.dataset.deleteAttached = '1';
+                btn.addEventListener('click', function(){
+                    var scoreId = btn.dataset.scoreId;
+                    if (!scoreId) return;
+                    var form = new FormData();
+                    form.append('score_id', scoreId);
+                    fetch('/admin/delete_score', { method: 'POST', body: form }).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при удалении строки'); });
                 });
             });
-
-            // Send creates
-            creates.forEach(function(create) {
-                var formData = new FormData();
-                formData.append('game_id', create.game_id);
-                formData.append('stage', create.stage);
-                formData.append('team_id', create.team_id);
-                formData.append('participant_id', create.participant_id);
-                formData.append('score', create.score);
-                formData.append('notes', create.notes);
-                
-                promises.push(fetch('/admin/add_score', {
-                    method: 'POST',
-                    body: formData
-                }));
+        }
+        function loadAllRows() {
+            if (!scoresTable) return;
+            var tbody = scoresTable.querySelector('tbody');
+            if (!tbody) return;
+            var existing = new Set();
+            tbody.querySelectorAll('tr').forEach(function(row){
+                var team = row.querySelector('td:nth-child(1)')?.textContent?.trim() || '';
+                var part = row.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
+                existing.add(team + '|' + part);
             });
-
-            if (promises.length === 0) {
-                alert('Нет изменений для сохранения');
+            var payloads = [];
+            ALL_PARTICIPANTS.forEach(function(part){
+                var key = (part.team_name || '—') + '|' + part.name;
+                if (existing.has(key)) return;
+                payloads.push({ game_id: GAME_ID, participant_id: part.id, team_id: part.team_id || undefined, score: 0 });
+            });
+            var participantTeamIds = new Set(ALL_PARTICIPANTS.map(function(p){ return p.team_id; }).filter(function(id){ return id; }));
+            ALL_TEAMS.forEach(function(team){
+                if (participantTeamIds.has(team.id)) return;
+                var key = team.name + '|—';
+                if (existing.has(key)) return;
+                payloads.push({ game_id: GAME_ID, team_id: team.id, score: 0 });
+            });
+            if (!payloads.length) {
+                alert('Нечего загружать');
                 return;
             }
+            Promise.all(payloads.map(function(payload){
+                return fetch('/admin/add_score_inline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                    .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); });
+            })).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при загрузке всех строк'); });
+        }
 
-            Promise.all(promises)
-                .then(function(responses) {
-                    if (responses.every(function(r) { return r.ok; })) {
-                        location.reload();
-                    } else {
-                        alert('Ошибка при сохранении');
-                    }
-                })
-                .catch(function(error) {
-                    console.error('Error:', error);
-                    alert('Ошибка при сохранении');
+        function makeInput(value) {
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.style.width = '80px';
+            input.style.padding = '4px';
+            input.style.borderRadius = '4px';
+            input.style.background = '#2a2a2a';
+            input.style.color = '#fff';
+            input.style.border = '1px solid #555';
+            input.value = (value === null || value === undefined || value === '' || value === '—') ? '' : value;
+            return input;
+        }
+
+        function makeScoreCellEditable(td) {
+            if (!td || td.querySelector('input')) return;
+            var orig = td.dataset.original || '';
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.value = orig;
+            input.style.width = '80px';
+            input.style.padding = '4px';
+            input.style.borderRadius = '4px';
+            input.style.background = '#2a2a2a';
+            input.style.color = '#fff';
+            input.style.border = '1px solid #555';
+            input.className = 'score-editor-input';
+            td.innerHTML = '';
+            td.appendChild(input);
+        }
+
+        function restoreScoreCell(td) {
+            if (!td) return;
+            var input = td.querySelector('input');
+            var value = td.dataset.original || '';
+            if (input) {
+                value = input.value;
+            }
+            td.innerHTML = '<span class="score-display">'+ (value === '' ? '—' : value) +'</span>';
+            td.dataset.original = value;
+        }
+
+        function makeRrCellEditable(div) {
+            if (!div || div.querySelector('input')) return;
+            var orig = div.dataset.score || '';
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.value = orig;
+            input.style.width = '80px';
+            input.style.padding = '4px';
+            input.style.borderRadius = '4px';
+            input.style.background = '#2a2a2a';
+            input.style.color = '#fff';
+            input.style.border = '1px solid #555';
+            input.className = 'score-editor-input';
+            div.innerHTML = '';
+            div.appendChild(input);
+            input.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') input.blur(); });
+            input.addEventListener('blur', function(){
+                var v = input.value;
+                div.innerHTML = (v === '' ? '—' : v);
+                div.dataset.score = (v === '' ? '' : v);
+                var key = div.dataset.matchKey;
+                var side = div.dataset.side;
+                if (!rrChanges[key]) rrChanges[key] = {a: null, b: null};
+                rrChanges[key][side] = (v === '' ? null : v);
+            });
+        }
+
+        function restoreRrCell(div) {
+            if (!div) return;
+            var input = div.querySelector('input');
+            var value = div.dataset.score || '';
+            if (input) {
+                value = input.value;
+            }
+            div.innerHTML = (value === '' ? '—' : value);
+            div.dataset.score = value;
+        }
+
+        function collectScoreChanges() {
+            scoreChanges = {};
+            if (!scoresTable) return;
+            scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                var td = row.querySelector('.score-cell');
+                if (!td) return;
+                var input = td.querySelector('input');
+                if (!input) return;
+                var sid = row.dataset.scoreId;
+                var orig = td.dataset.original || '';
+                var v = input.value;
+                if (String(v) !== String(orig)) {
+                    scoreChanges[sid] = v;
+                }
+                td.dataset.original = v;
+            });
+        }
+
+        function enableEditMode(){
+            editMode = true;
+            editBtn.style.display = 'none';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            if (scoresTable) {
+                scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                    var td = row.querySelector('.score-cell');
+                    makeScoreCellEditable(td);
                 });
+            }
+            rrCells.forEach(function(div){
+                makeRrCellEditable(div);
+                div.style.cursor = 'text';
+            });
+        }
+
+        function disableEditMode(){
+            editMode = false;
+            editBtn.style.display = 'inline-block';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+            if (scoresTable) {
+                scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                    var td = row.querySelector('.score-cell');
+                    restoreScoreCell(td);
+                });
+            }
+            rrCells.forEach(function(div, idx){
+                restoreRrCell(div);
+                var clone = div.cloneNode(true);
+                div.parentNode.replaceChild(clone, div);
+                rrCells[idx] = clone;
+            });
+        }
+
+        function rrCellClick(e){
+            if (!editMode) return;
+            var div = e.currentTarget;
+            if (div.querySelector('input')) return;
+            var orig = div.dataset.score || '';
+            var input = makeInput(orig);
+            div.innerHTML = '';
+            div.appendChild(input);
+            input.focus();
+            input.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') input.blur(); });
+            input.addEventListener('blur', function(){
+                var v = input.value;
+                div.innerHTML = (v === '' ? '—' : v);
+                div.dataset.score = (v === '' ? '' : v);
+                var key = div.dataset.matchKey;
+                var side = div.dataset.side;
+                if (!rrChanges[key]) rrChanges[key] = {a: null, b: null};
+                rrChanges[key][side] = (v === '' ? null : v);
+            });
+        }
+
+        editBtn.addEventListener('click', function(){ enableEditMode(); });
+
+        cancelBtn.addEventListener('click', function(){
+            // revert DOM to original values
+            // scores
+            if (scoresTable) {
+                scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                    var td = row.querySelector('.score-cell');
+                    if (!td) return;
+                    var orig = td.dataset.original;
+                    td.innerHTML = '<span class="score-display">'+ (orig === '' ? '—' : orig) +'</span>';
+                });
+            }
+            // rr
+            rrCells.forEach(function(div){
+                var orig = div.getAttribute('data-score') || '';
+                div.innerHTML = (orig === '' ? '—' : orig);
+            });
+            scoreChanges = {};
+            rrChanges = {};
+            disableEditMode();
         });
+
+        saveBtn.addEventListener('click', function(){
+            // make sure any active inline edits are committed before save
+            Array.from(document.querySelectorAll('.score-cell input, .rr-editable input')).forEach(function(input){ input.blur(); });
+            setTimeout(function() {
+                collectScoreChanges();
+                var promises = [];
+                var scoreIds = Object.keys(scoreChanges);
+            if (scoreIds.length > 0) {
+                var payload = { scores: [] };
+                scoreIds.forEach(function(id){ payload.scores.push({ id: id, score: scoreChanges[id] }); });
+                promises.push(fetch('/admin/update_scores_bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
+            }
+
+            // prepare rr match updates: group by match_key, need to send full match (team ids + both sides)
+            var rrPromises = [];
+            Object.keys(rrChanges).forEach(function(key){
+                var changed = rrChanges[key];
+                // find both cells in DOM to get team ids
+                var div = document.querySelector('.rr-editable[data-match-key="'+key+'"]');
+                if (!div) return;
+                var teamA = div.dataset.teamA;
+                var teamB = div.dataset.teamB;
+                var scoreA = null;
+                var scoreB = null;
+                // try to get scores from DOM for both sides
+                var cellA = document.querySelector('.rr-editable[data-match-key="'+key+'"][data-side="a"]');
+                var cellB = document.querySelector('.rr-editable[data-match-key="'+key+'"][data-side="b"]');
+                if (cellA) scoreA = cellA.dataset.score || null;
+                if (cellB) scoreB = cellB.dataset.score || null;
+                // override with changes if present
+                if (changed.a !== null && changed.a !== undefined) scoreA = changed.a;
+                if (changed.b !== null && changed.b !== undefined) scoreB = changed.b;
+
+                var form = new FormData();
+                form.append('game_id', GAME_ID);
+                form.append('match_key', key);
+                form.append('team_a_id', teamA);
+                form.append('team_b_id', teamB);
+                form.append('score_a', scoreA === null ? '' : scoreA);
+                form.append('score_b', scoreB === null ? '' : scoreB);
+                rrPromises.push(fetch('/admin/round_robin_save', { method: 'POST', body: form }));
+            });
+                if (rrPromises.length) promises = promises.concat(rrPromises);
+
+                if (promises.length === 0) { alert('Нет изменений для сохранения'); return; }
+
+                Promise.all(promises).then(function(res){
+                    // if all ok, reload
+                    return Promise.all(res.map(function(r){ return r.ok ? r : Promise.reject(r); }));
+                }).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при сохранении'); });
+            }, 10);
+        });
+
+        // inline add-row helper
+        (function(){
+            var addRowBtn = document.getElementById('addRowBtn');
+            var downloadAllBtn = document.getElementById('downloadAllBtn');
+            if (downloadAllBtn) downloadAllBtn.addEventListener('click', function(){ loadAllRows(); });
+            if (!addRowBtn || !scoresTable) return;
+            sortScoreTable();
+            attachDeleteButtons();
+            addRowBtn.addEventListener('click', function(){
+                var tbody = scoresTable.querySelector('tbody');
+                var tr = createInlineRow(0, 0, 0);
+                if (tbody.firstChild) tbody.insertBefore(tr, tbody.firstChild);
+                else tbody.appendChild(tr);
+            });
+        })();
+    })();
+</script>
+{% endif %}
+
+{% if game.slug == 'geoguessr' %}
+<script>
+    (function() {
+        var scoresTable = document.getElementById('geoguessr-table');
+        if (!scoresTable) return;
+        var tbody = scoresTable.querySelector('tbody');
+        if (!tbody) return;
+        var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row) { return row.querySelector('td'); });
+        rows.sort(function(a, b) {
+            var parseScore = function(row) {
+                var td = row.querySelector('.score-cell');
+                if (!td) return -Infinity;
+                var text = td.dataset.original || td.textContent || '';
+                var n = parseFloat(String(text).replace(',', '.'));
+                return isNaN(n) ? -Infinity : n;
+            };
+            return parseScore(b) - parseScore(a);
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
+    })();
+</script>
+<script>
+    (function() {
+        var totalsTable = document.getElementById('team-totals-table');
+        if (!totalsTable) return;
+        var tbody = totalsTable.querySelector('tbody');
+        if (!tbody) return;
+        var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row) { return row.querySelector('td'); });
+        rows.sort(function(a, b) {
+            var parseValue = function(row) {
+                var cell = row.querySelector('td:nth-child(2)');
+                if (!cell) return -Infinity;
+                var value = parseFloat(String(cell.textContent || '').replace(',', '.'));
+                return isNaN(value) ? -Infinity : value;
+            };
+            return parseValue(b) - parseValue(a);
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
     })();
 </script>
 {% endif %}

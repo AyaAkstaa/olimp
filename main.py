@@ -1,5 +1,5 @@
 ﻿from fastapi import FastAPI, Request, Form, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
@@ -450,6 +450,113 @@ def update_score(score_id: int = Form(...), score: int = Form(...), notes: str =
         record.notes = notes.strip()
         db.commit()
     return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/update_scores_bulk")
+async def update_scores_bulk(request: Request, db: Session = Depends(get_db)):
+    # verify admin
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    items = payload.get("scores", [])
+    updated = 0
+    for it in items:
+        try:
+            sid = int(it.get("id"))
+        except Exception:
+            continue
+        rec = db.query(Score).filter(Score.id == sid).first()
+        if rec:
+            if "score" in it and it.get("score") is not None and it.get("score") != "":
+                try:
+                    rec.score = int(it.get("score"))
+                except Exception:
+                    pass
+            if "notes" in it:
+                rec.notes = str(it.get("notes") or "").strip()
+            updated += 1
+    if updated:
+        db.commit()
+    return JSONResponse({"status": "ok", "updated": updated})
+
+
+@app.post("/admin/add_score_inline")
+async def add_score_inline(request: Request, db: Session = Depends(get_db)):
+    # admin-only
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    game_id = payload.get('game_id')
+    if not game_id:
+        return JSONResponse({"error": "missing_game_id"}, status_code=400)
+
+    # determine or create team
+    team_id = payload.get('team_id')
+    team_name = payload.get('team_name')
+    if team_id:
+        try:
+            team_id = int(team_id)
+        except Exception:
+            team_id = None
+
+    if not team_id and team_name:
+        team_name = team_name.strip()
+        if team_name:
+            team = db.query(Team).filter(func.lower(Team.name) == team_name.lower()).first()
+            if not team:
+                team = Team(name=team_name)
+                db.add(team)
+                db.commit()
+                db.refresh(team)
+            team_id = team.id
+
+    # determine or create participant
+    participant_id = payload.get('participant_id')
+    participant_name = payload.get('participant_name')
+    if participant_id:
+        try:
+            participant_id = int(participant_id)
+        except Exception:
+            participant_id = None
+
+    if not participant_id and participant_name:
+        participant_name = participant_name.strip()
+        if participant_name:
+            participant = db.query(Participant).filter(Participant.name == participant_name).first()
+            if not participant:
+                participant = Participant(name=participant_name, team_id=team_id if team_id else None)
+                db.add(participant)
+                db.commit()
+                db.refresh(participant)
+            participant_id = participant.id
+
+    # score
+    try:
+        score_val = int(payload.get('score', 0))
+    except Exception:
+        score_val = 0
+
+    notes = payload.get('notes') or ''
+
+    rec = Score(game_id=game_id, stage='', match_title='', team_id=team_id if team_id else None, participant_id=participant_id if participant_id else None, score=score_val, notes=notes.strip())
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return JSONResponse({"status": "ok", "score_id": rec.id})
 
 
 @app.post("/admin/delete_score")
