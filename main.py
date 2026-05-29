@@ -290,6 +290,11 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     participants = db.query(Participant).order_by(Participant.name).all()
     scores = db.query(Score).order_by(Score.game_id, Score.stage, Score.match_title).all()
     schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+    # collect distinct stages and match titles to suggest in admin form
+    stages_q = db.query(Score.stage).filter(Score.stage != None, Score.stage != "").distinct().all()
+    match_titles_q = db.query(Score.match_title).filter(Score.match_title != None, Score.match_title != "").distinct().all()
+    stages = [s[0] for s in stages_q]
+    match_titles = [m[0] for m in match_titles_q]
     user = cookie_user
     return render_template(
         "admin.html",
@@ -299,6 +304,8 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         participants=participants,
         scores=scores,
         schedule_items=schedule_items,
+        stages=stages,
+        match_titles=match_titles,
         user=user,
     )
 
@@ -431,5 +438,63 @@ def delete_schedule(schedule_id: int = Form(...), db: Session = Depends(get_db))
     item = db.query(ScheduleItem).filter(ScheduleItem.id == schedule_id).first()
     if item:
         db.delete(item)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/update_schedule")
+def update_schedule(
+    schedule_id: int = Form(...),
+    game_id: int = Form(...),
+    title: str = Form(...),
+    time: str = Form(...),
+    location: str = Form(""),
+    description: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    item = db.query(ScheduleItem).filter(ScheduleItem.id == schedule_id).first()
+    if item:
+        item.game_id = game_id
+        item.title = title.strip()
+        item.time = time.strip()
+        item.location = location.strip()
+        item.description = description.strip()
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/delete_team")
+def delete_team(team_id: int = Form(...), db: Session = Depends(get_db)):
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if team:
+        db.delete(team)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/update_team")
+def update_team(team_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if team and name.strip():
+        team.name = name.strip()
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/delete_participant")
+def delete_participant(participant_id: int = Form(...), db: Session = Depends(get_db)):
+    p = db.query(Participant).filter(Participant.id == participant_id).first()
+    if p:
+        db.delete(p)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/update_participant")
+def update_participant(participant_id: int = Form(...), name: str = Form(...), team_id: int = Form(0), db: Session = Depends(get_db)):
+    p = db.query(Participant).filter(Participant.id == participant_id).first()
+    if p and name.strip():
+        p.name = name.strip()
+        p.team_id = team_id if team_id else None
         db.commit()
     return RedirectResponse(url="/admin", status_code=303)
