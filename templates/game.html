@@ -14,10 +14,18 @@
         line-height: 1.7;
         color: #e7e7e7;
     }
+    .rr-table { width:100%; border-collapse:collapse; margin-top:24px; table-layout: fixed; }
+    .rr-table th, .rr-table td { border:1px solid rgba(255,255,255,0.12); padding:14px 10px; text-align:center; font-size:0.95rem; }
+    .rr-table th { background: rgba(230,0,122,0.95); color: #fff; font-weight: 700; }
+    .rr-table td:first-child, .rr-table th:first-child { position: sticky; left: 0; z-index: 2; background: rgba(20,20,20,0.92); text-align:left; padding-left:12px; }
+    .rr-table tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.02); }
+    .rr-table td:first-child { background: rgba(255,255,255,0.05); }
+    .rr-table td { min-width: 90px; }
     .grid-two {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 24px;
+        display: block;
+    }
+    .grid-two > div {
+        margin-bottom: 24px;
     }
     .leaderboard, .schedule-table {
         width: 100%;
@@ -42,6 +50,31 @@
         border-bottom: 1px solid rgba(255,255,255,0.08);
         font-size: 1rem;
     }
+    .schedule-list {
+        display: grid;
+        gap: 16px;
+        margin-top: 24px;
+    }
+    .schedule-item {
+        padding: 18px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+        line-height: 1.6;
+    }
+    .schedule-time {
+        color: var(--danger);
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .schedule-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .schedule-desc {
+        color: #ddd;
+    }
     .leaderboard tr:nth-child(odd), .schedule-table tr:nth-child(odd) { background: rgba(255,255,255,0.03); }
     .leaderboard tr:hover, .schedule-table tr:hover { background: rgba(230,0,122,0.12); }
     .rank-1 { color: #ffd700; text-shadow: 1px 1px 0px #000; font-size: 1.3rem; }
@@ -63,38 +96,110 @@
     </div>
 </div>
 
-<div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
-    <h2 style="color: var(--danger); margin-top: 0;">Круговики и турниры</h2>
-    {% if rounds %}
-    <ul>
-        {% for rd in rounds %}
-            <li><a href="/round/{{ rd.id }}">{{ rd.name }}</a></li>
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
+    <h2 style="color: var(--danger); margin-top: 0;">Расписание турнира</h2>
+    {% if schedule_items %}
+    <div class="schedule-list">
+        {% for item in schedule_items %}
+        <div class="schedule-item">
+            <div class="schedule-time">{{ item.time }}</div>
+            <div class="schedule-title">{{ item.title }}</div>
+            <div class="schedule-desc">{{ item.description or '—' }}</div>
+        </div>
         {% endfor %}
-    </ul>
+    </div>
     {% else %}
-    <p style="color:#ddd;">Публичных раундов пока нет. Создайте их в админке.</p>
+    <p style="color:#ddd;">Расписание пока не заполнено. Добавьте матчи в админке.</p>
     {% endif %}
 </div>
 
-<div class="grid-two">
-    <div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
-        <h2 style="color: var(--danger); margin-top: 0;">Результаты по этапам</h2>
-        <table class="leaderboard">
-            <thead>
-                <tr>
+<div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
+    <h2 style="color: var(--danger); margin-top: 0;">Круговик</h2>
+    {% if game.slug == 'geoguessr' and rr_teams and rr_teams|length > 0 %}
+    <table class="rr-table" style="margin-top:8px;">
+        <thead>
+            <tr>
+                <th></th>
+                {% for col_team in rr_teams %}
+                    <th>{{ col_team.name }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row_team in rr_teams %}
+            <tr>
+                <th>{{ row_team.name }}</th>
+                {% for col_team in rr_teams %}
+                    {% if row_team.id == col_team.id %}
+                        <td>✕</td>
+                    {% else %}
+                        {% set key1 = row_team.id|string ~ '_' ~ col_team.id|string %}
+                        {% set key2 = col_team.id|string ~ '_' ~ row_team.id|string %}
+                        {% set m = rr_matrix.get(key1) or rr_matrix.get(key2) %}
+                        {% if m %}
+                            {% if m.team_a_id == row_team.id %}
+                                {% set raw = m.score_a %}
+                            {% else %}
+                                {% set raw = m.score_b %}
+                            {% endif %}
+                            <td>{{ raw if raw is not none else '—' }}</td>
+                        {% else %}
+                            <td>—</td>
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#ddd;">Публичных матчей круговика пока нет. Добавьте их в админке.</p>
+    {% endif %}
+</div>
+
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+    <h2 style="color: var(--danger); margin-top: 0;">{% if game.slug == 'geoguessr' %}Все против всех{% else %}Результаты по этапам{% endif %}</h2>
+    
+    {% if is_admin and game.slug == 'geoguessr' %}
+    <div style="margin-bottom: 16px;">
+        <button id="editTableBtn" type="button" style="background:#e60078; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать</button>
+        <button id="addRowBtn" type="button" style="display:none; background:#0066cc; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Добавить строку</button>
+        <button id="loadAllBtn" type="button" style="display:none; background:#0066cc; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Загрузить всех</button>
+        <button id="saveTableBtn" type="button" style="display:none; background:#28a745; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Сохранить</button>
+        <button id="cancelTableBtn" type="button" style="display:none; background:#333; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Отменить</button>
+    </div>
+    {% endif %}
+    
+    <table class="leaderboard" id="geoguessr-table">
+        <thead>
+            <tr>
+                {% if game.slug == 'geoguessr' %}
+                    <th>Команда</th>
+                    <th>Игрок</th>
+                    <th>Очки</th>
+                    {% if is_admin %}<th></th>{% endif %}
+                {% else %}
                     <th>Этап</th>
-                    <th>Матч</th>
                     <th>Команда / Участник</th>
                     <th>Очки</th>
                     <th>Примечание</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if scores %}
-                    {% for result in scores %}
-                    <tr>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if scores %}
+                {% for result in scores %}
+                <tr data-score-id="{{ result.id }}">
+                    {% if game.slug == 'geoguessr' %}
+                        <td>{{ result.team.name if result.team else '—' }}</td>
+                        <td>{{ result.participant.name if result.participant else '—' }}</td>
+                        <td class="score-cell" data-original="{{ result.score }}">
+                            <span class="score-display">{{ result.score }}</span>
+                            <input type="number" class="score-input" value="{{ result.score }}" style="display:none; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;">
+                        </td>
+                        {% if is_admin %}<td class="delete-cell" style="text-align:center;"><button type="button" class="delete-row-btn" style="display:none; background:#dc3545; padding:4px 10px; border:none; color:#fff; cursor:pointer; border-radius:3px; font-size:0.9rem;">×</button></td>{% endif %}
+                    {% else %}
                         <td>{{ result.stage or 'Общий' }}</td>
-                        <td>{{ result.match_title or '—' }}</td>
                         <td>
                             {% if result.team %}{{ result.team.name }}{% endif %}
                             {% if result.participant %}
@@ -104,45 +209,316 @@
                         </td>
                         <td>{{ result.score }}</td>
                         <td>{{ result.notes or '—' }}</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{% if game.slug == 'geoguessr' %}3{% else %}5{% endif %}" style="text-align: center; color: #ddd;">Результатов пока нет. Добавьте их в админке.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+    {% if game.slug == 'geoguessr' %}
+    <div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+        <h2 style="color: var(--danger); margin-top: 0;">Командный зачёт</h2>
+        {% set totals = namespace(data={}) %}
+        {% set team_names = namespace(map={}) %}
+        {% for team in rr_teams %}
+            {% set _ = team_names.map.update({team.id: team.name}) %}
+        {% endfor %}
+        {% for result in scores %}
+            {% if result.team %}
+                {% set team_name = result.team.name %}
+                {% set current = totals.data.get(team_name, 0) %}
+                {% set _ = totals.data.update({team_name: current + (result.score or 0)}) %}
+            {% endif %}
+        {% endfor %}
+        {% for match in rr_matrix.values() %}
+            {% if match.team_a_id and match.score_a is not none %}
+                {% set team_name = team_names.map.get(match.team_a_id, 'Команда') %}
+                {% set current = totals.data.get(team_name, 0) %}
+                {% set _ = totals.data.update({team_name: current + match.score_a}) %}
+            {% endif %}
+            {% if match.team_b_id and match.score_b is not none %}
+                {% set team_name = team_names.map.get(match.team_b_id, 'Команда') %}
+                {% set current = totals.data.get(team_name, 0) %}
+                {% set _ = totals.data.update({team_name: current + match.score_b}) %}
+            {% endif %}
+        {% endfor %}
+        <table class="leaderboard">
+            <thead>
+                <tr>
+                    <th>Команда</th>
+                    <th>Очки</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if totals.data %}
+                    {% for team_name, points in totals.data.items() %}
+                    <tr>
+                        <td>{{ team_name }}</td>
+                        <td>{{ points }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="5" style="text-align: center; color: #ddd;">Результатов пока нет. Добавьте их в админке.</td>
+                        <td colspan="2" style="text-align: center; color: #ddd;">Нет командных результатов для отображения.</td>
                     </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
-
-    <div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
-        <h2 style="color: var(--danger); margin-top: 0;">Расписание турнира</h2>
-        {% if schedule_items %}
-        <table class="schedule-table">
-            <thead>
-                <tr>
-                    <th>Время</th>
-                    <th>Матч</th>
-                    <th>Локация</th>
-                    <th>Описание</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in schedule_items %}
-                <tr>
-                    <td>{{ item.time }}</td>
-                    <td>{{ item.title }}</td>
-                    <td>{{ item.location or '—' }}</td>
-                    <td>{{ item.description or '—' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p style="color:#ddd;">Расписание пока не заполнено. Добавьте матчи в админке.</p>
-        {% endif %}
-    </div>
-</div>
+    {% endif %}
 
 <a href="/" class="back-link">❮ Назад к списку игр</a>
+
+{% if is_admin and game.slug == 'geoguessr' %}
+<script>
+    var gameId = {{ game.id }};
+    var allTeams = {{ all_teams | tojson }};
+    var allParticipants = {{ all_participants | tojson }};
+    
+    // Convert lists to arrays of {id, name}
+    var teamsList = allTeams.map(function(t) { return {id: t.id, name: t.name}; });
+    var participantsList = allParticipants.map(function(p) { return {id: p.id, name: p.name, team_name: p.team ? p.team.name : ''}; });
+
+    (function() {
+        var editBtn = document.getElementById('editTableBtn');
+        var addRowBtn = document.getElementById('addRowBtn');
+        var loadAllBtn = document.getElementById('loadAllBtn');
+        var saveBtn = document.getElementById('saveTableBtn');
+        var cancelBtn = document.getElementById('cancelTableBtn');
+        var table = document.getElementById('geoguessr-table');
+        var tbody = table.querySelector('tbody');
+        var isEditing = false;
+        var newRows = [];
+
+        if (!editBtn || !table) return;
+
+        editBtn.addEventListener('click', function() {
+            isEditing = true;
+            editBtn.style.display = 'none';
+            addRowBtn.style.display = 'inline-block';
+            loadAllBtn.style.display = 'inline-block';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+
+            // Show all inputs and hide spans, show delete buttons
+            table.querySelectorAll('.score-cell').forEach(function(cell) {
+                var span = cell.querySelector('.score-display');
+                var input = cell.querySelector('.score-input');
+                if (span) span.style.display = 'none';
+                if (input) input.style.display = 'inline-block';
+            });
+            table.querySelectorAll('.delete-row-btn').forEach(function(btn) {
+                btn.style.display = 'inline-block';
+            });
+            attachDeleteHandlers();
+        });
+
+        function attachDeleteHandlers() {
+            table.querySelectorAll('.delete-row-btn').forEach(function(btn) {
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    var row = btn.closest('tr');
+                    row.remove();
+                    if (!row.dataset.scoreId || row.dataset.scoreId.startsWith('new-')) {
+                        newRows = newRows.filter(function(r) { return r !== row; });
+                    }
+                };
+            });
+        }
+
+        cancelBtn.addEventListener('click', function() {
+            isEditing = false;
+            editBtn.style.display = 'inline-block';
+            addRowBtn.style.display = 'none';
+            loadAllBtn.style.display = 'none';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+
+            // Remove new rows
+            newRows.forEach(function(row) { row.remove(); });
+            newRows = [];
+
+            // Reset all inputs and show spans, hide delete buttons
+            table.querySelectorAll('.score-cell').forEach(function(cell) {
+                var span = cell.querySelector('.score-display');
+                var input = cell.querySelector('.score-input');
+                input.value = cell.dataset.original;
+                if (span) span.style.display = 'inline';
+                if (input) input.style.display = 'none';
+            });
+            table.querySelectorAll('.delete-row-btn').forEach(function(btn) {
+                btn.style.display = 'none';
+            });
+        });
+
+        addRowBtn.addEventListener('click', function() {
+            var newRow = document.createElement('tr');
+            newRow.dataset.scoreId = 'new-' + Date.now();
+            newRow.innerHTML = '<td><select class="team-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите команду —</option></select></td><td><select class="participant-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите участника —</option></select></td><td class="score-cell" data-original="0"><input type="number" class="score-input" value="0" style="display:inline-block; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"></td><td class="delete-cell" style="text-align:center;"><button type="button" class="delete-row-btn" style="background:#dc3545; padding:4px 10px; border:none; color:#fff; cursor:pointer; border-radius:3px; font-size:0.9rem;">×</button></td>';
+            
+            // Populate team select
+            var teamSelect = newRow.querySelector('.team-select');
+            teamsList.forEach(function(team) {
+                var opt = document.createElement('option');
+                opt.value = team.id;
+                opt.textContent = team.name;
+                teamSelect.appendChild(opt);
+            });
+            
+            // Populate participant select
+            var participantSelect = newRow.querySelector('.participant-select');
+            participantsList.forEach(function(p) {
+                var opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name + (p.team_name ? ' (' + p.team_name + ')' : '');
+                participantSelect.appendChild(opt);
+            });
+
+            tbody.appendChild(newRow);
+            newRows.push(newRow);
+            attachDeleteHandlers();
+        });
+
+        loadAllBtn.addEventListener('click', function() {
+            // Get existing participants in table
+            var existingIds = new Set();
+            table.querySelectorAll('tr[data-score-id]').forEach(function(row) {
+                var participantCell = row.cells[1];
+                if (participantCell) {
+                    participantsList.forEach(function(p) {
+                        if (participantCell.textContent.includes(p.name)) {
+                            existingIds.add(p.id);
+                        }
+                    });
+                }
+            });
+
+            // Add missing participants
+            participantsList.forEach(function(p) {
+                if (!existingIds.has(p.id)) {
+                    var newRow = document.createElement('tr');
+                    newRow.dataset.scoreId = 'new-' + Date.now() + '-' + p.id;
+                    newRow.innerHTML = '<td><select class="team-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите команду —</option></select></td><td><select class="participant-select" style="width:100%; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"><option value="">— выберите участника —</option></select></td><td class="score-cell" data-original="0"><input type="number" class="score-input" value="0" style="display:inline-block; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"></td><td class="delete-cell" style="text-align:center;"><button type="button" class="delete-row-btn" style="background:#dc3545; padding:4px 10px; border:none; color:#fff; cursor:pointer; border-radius:3px; font-size:0.9rem;">×</button></td>';
+                    
+                    var teamSelect = newRow.querySelector('.team-select');
+                    teamsList.forEach(function(team) {
+                        var opt = document.createElement('option');
+                        opt.value = team.id;
+                        opt.textContent = team.name;
+                        if (p.team_name && team.name === p.team_name) {
+                            opt.selected = true;
+                        }
+                        teamSelect.appendChild(opt);
+                    });
+                    
+                    var participantSelect = newRow.querySelector('.participant-select');
+                    participantsList.forEach(function(pt) {
+                        var opt = document.createElement('option');
+                        opt.value = pt.id;
+                        opt.textContent = pt.name + (pt.team_name ? ' (' + pt.team_name + ')' : '');
+                        if (pt.id === p.id) {
+                            opt.selected = true;
+                        }
+                        participantSelect.appendChild(opt);
+                    });
+
+                    tbody.appendChild(newRow);
+                    newRows.push(newRow);
+                }
+            });
+            attachDeleteHandlers();
+        });
+
+        saveBtn.addEventListener('click', function() {
+            var updates = [];
+            var creates = [];
+
+            // Collect updates to existing rows
+            table.querySelectorAll('tr[data-score-id]').forEach(function(row) {
+                var scoreId = row.dataset.scoreId;
+                if (scoreId && !scoreId.startsWith('new-')) {
+                    var input = row.querySelector('.score-input');
+                    if (input) {
+                        var newValue = input.value;
+                        var original = row.querySelector('.score-cell').dataset.original;
+                        if (newValue !== original) {
+                            updates.push({ id: scoreId, score: newValue });
+                        }
+                    }
+                }
+            });
+
+            // Collect new rows
+            newRows.forEach(function(row) {
+                var teamSelect = row.querySelector('.team-select');
+                var participantSelect = row.querySelector('.participant-select');
+                var scoreInput = row.querySelector('.score-input');
+                if (teamSelect && participantSelect && scoreInput) {
+                    creates.push({
+                        game_id: gameId,
+                        stage: 'Все против всех',
+                        team_id: parseInt(teamSelect.value) || 0,
+                        participant_id: parseInt(participantSelect.value) || 0,
+                        score: parseInt(scoreInput.value) || 0,
+                        notes: ''
+                    });
+                }
+            });
+
+            // Send updates
+            var promises = updates.map(function(update) {
+                var formData = new FormData();
+                formData.append('score_id', update.id);
+                formData.append('score', update.score);
+                
+                return fetch('/admin/update_score', {
+                    method: 'POST',
+                    body: formData
+                });
+            });
+
+            // Send creates
+            creates.forEach(function(create) {
+                var formData = new FormData();
+                formData.append('game_id', create.game_id);
+                formData.append('stage', create.stage);
+                formData.append('team_id', create.team_id);
+                formData.append('participant_id', create.participant_id);
+                formData.append('score', create.score);
+                formData.append('notes', create.notes);
+                
+                promises.push(fetch('/admin/add_score', {
+                    method: 'POST',
+                    body: formData
+                }));
+            });
+
+            if (promises.length === 0) {
+                alert('Нет изменений для сохранения');
+                return;
+            }
+
+            Promise.all(promises)
+                .then(function(responses) {
+                    if (responses.every(function(r) { return r.ok; })) {
+                        location.reload();
+                    } else {
+                        alert('Ошибка при сохранении');
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    alert('Ошибка при сохранении');
+                });
+        });
+    })();
+</script>
+{% endif %}
+
 {% endblock %}

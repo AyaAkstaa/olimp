@@ -1,59 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
-<style>
-.wrap { max-width:1000px; margin:0 auto; padding:16px }
-.table { width:100%; border-collapse:collapse }
-.table th, .table td { border:1px solid #ddd; padding:8px; text-align:center }
-.player-col { text-align:left; padding-left:10px }
-</style>
-<div class="wrap">
-  <h1>Раунд: {{ round.name }} — {{ round.game.name }}</h1>
-  <p>Матчи добавляются через админ-панель.</p>
-
-  <table class="table">
-    <thead>
-      <tr>
-        <th></th>
-        {% for p in players %}
-          <th class="player-col">{% if p.participant %}{{ p.participant.name }}{% elif p.team %}{{ p.team.name }}{% else %}#{{ p.id }}{% endif %}</th>
-        {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in players %}
-      {% set i = loop.index0 %}
-      <tr>
-        <th class="player-col">{% if p.participant %}{{ p.participant.name }}{% elif p.team %}{{ p.team.name }}{% else %}#{{ p.id }}{% endif %}</th>
-        {% for q in players %}
-          {% set j = loop.index0 %}
-          {% if i == j %}
-            <td>—</td>
-          {% else %}
-            {% set a = p.id %}
-            {% set b = q.id %}
-            {% if a < b %}
-              {% set key = a|string ~ '_' ~ b|string %}
-            {% else %}
-              {% set key = b|string ~ '_' ~ a|string %}
-            {% endif %}
-            {% if matrix.get(key) %}
-              {% set m = matrix.get(key) %}
-              {% if m.player_a_id == a %}
-                <td>{{ m.score_a }} — {{ m.score_b }}</td>
-              {% else %}
-                <td>{{ m.score_b }} — {{ m.score_a }}</td>
-              {% endif %}
-            {% else %}
-              <td>—</td>
-            {% endif %}
-          {% endif %}
-        {% endfor %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <p style="margin-top:12px"><a href="/admin" class="link-pill">Открыть админку</a></p>
+<div style="padding:24px; color:#ddd;">
+  <h2>Устаревший шаблон круговика</h2>
+  <p>Этот старый шаблон удалён. Используйте <a href="/admin/round_robin">редактор круговика</a>.</p>
 </div>
 {% endblock %}

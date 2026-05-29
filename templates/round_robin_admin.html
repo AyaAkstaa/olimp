@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .wrap { max-width:1000px; margin:0 auto; padding:24px }
+  .team-slot { display:flex; gap:8px; align-items:center; margin-bottom:8px }
+  .rr-table { width:100%; border-collapse:collapse; margin-top:12px; table-layout: fixed; }
+  .rr-table th, .rr-table td { border:1px solid rgba(255,255,255,0.12); padding:14px 10px; text-align:center; font-size:0.95rem; }
+  .rr-table th { background: rgba(230,0,122,0.95); color: #fff; font-weight: 700; }
+  .rr-table td:first-child { font-weight: 700; background: rgba(255,255,255,0.04); }
+  .rr-table td:nth-child(n+2):nth-last-child(n+2) { min-width: 90px; }
+  .rr-table td:first-child, .rr-table th:first-child { position: sticky; left: 0; z-index: 2; background: rgba(20,20,20,0.92); }
+  .rr-table thead th:first-child { z-index: 3; }
+  .rr-table td:nth-child(n+2):nth-last-child(n+2):hover { background: rgba(255,255,255,0.08); }
+  .rr-table tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.02); }
+  .rr-table tbody tr td:first-child { background: rgba(255,255,255,0.05); }
+  .rr-table td:first-child { text-align: left; padding-left: 14px; }
+  .rr-table td:nth-child(n+2):nth-last-child(n+2) .editable { display: inline-block; width: 100%; height: 100%; min-height: 40px; line-height: 40px; }
+  .rr-table .editable { cursor:pointer; background: rgba(255,255,255,0.04); border-radius: 6px; }
+  .rr-table td:nth-child(n+2):nth-last-child(n+2):nth-child(n+2) { }
+  .rr-table td:first-child { background: rgba(11, 11, 25, 0.92); }
+  .saved-table { width:100%; border-collapse: collapse; margin-top:12px; }
+  .saved-table th, .saved-table td { padding: 14px 12px; border:1px solid rgba(255,255,255,0.12); }
+  .saved-table th { background: rgba(230,0,122,0.95); color:#fff; text-align:left; }
+  .saved-table td { background: rgba(0,0,0,0.35); }
+  .editable { cursor:pointer; background: rgba(255,255,255,0.03); }
+  .small { font-size:0.9rem; color:#ccc }
+  .controls { display:flex; gap:12px; align-items:center }
+</style>
+<div class="wrap">
+  <h1 class="title-splash">Редактор круговика</h1>
+  <p class="small">Выберите игру и команды (4 или 5). Нажмите на ячейку матча, чтобы отредактировать счёт, сохранение происходит автоматически.</p>
+
+  <div style="display:flex; gap:18px; align-items:center; margin-top:12px;">
+    <form id="gameForm" method="GET" action="/admin/round_robin">
+      <label>Игра</label>
+      <select name="game_id" onchange="this.form.submit()">
+        {% for g in games %}
+          <option value="{{ g.id }}" {% if g.id == game_id %}selected{% endif %}>{{ g.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <div class="controls">
+      <label>Команд:</label>
+      <select id="nTeamsSelect">
+        <option value="4" {% if n_teams == 4 %}selected{% endif %}>4</option>
+        <option value="5" {% if n_teams == 5 %}selected{% endif %}>5</option>
+      </select>
+      <button id="applyTeamsBtn">Применить</button>
+    </div>
+  </div>
+
+  <div id="teamSlots" style="margin-top:14px">
+    {% for i in range(n_teams) %}
+      <div class="team-slot">
+        <label>Слот {{ i+1 }}</label>
+        <select class="team-select" data-slot="{{ i }}">
+          <option value="0">— пусто —</option>
+          {% for t in teams %}
+            <option value="{{ t.id }}" {% if round_robin_teams and round_robin_teams|length > i and round_robin_teams[i].id == t.id %}selected{% endif %}>{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endfor %}
+  </div>
+
+  <p class="small">Выберите все команды. Круговик отрисуется в виде матрицы, редактируется кликом по ячейке.</p>
+  <h2 style="color: var(--danger); margin-top: 24px;">Матрица круговика</h2>
+  <div id="tableWrap"></div>
+  <p id="editorStatus" class="small" style="margin-top:12px; color:#ffd;">Статус: выберите команды и нажмите на ячейку для ввода очков.</p>
+</div>
+
+<script>
+const nTeamsSelect = document.getElementById('nTeamsSelect');
+const applyBtn = document.getElementById('applyTeamsBtn');
+const teamSlots = document.getElementById('teamSlots');
+const tableWrap = document.getElementById('tableWrap');
+const editorStatus = document.getElementById('editorStatus');
+const gameId = {{ game_id or 'null' }};
+const TEAM_NAMES = {
+  {% for t in teams %}
+    '{{ t.id }}': '{{ t.name }}',
+  {% endfor %}
+};
+const INITIAL_SLOTS = [
+  {% for i in range(n_teams) %}
+    {% if round_robin_teams and round_robin_teams|length > i %}{{ round_robin_teams[i].id }}{% else %}0{% endif %}{% if not loop.last %}, {% endif %}
+  {% endfor %}
+];
+
+// build initial slots based on current n
+function buildSlots(n) {
+  teamSlots.innerHTML = '';
+  for (let i=0;i<n;i++){
+    const div = document.createElement('div'); div.className='team-slot';
+    const label = document.createElement('label'); label.textContent = 'Слот '+(i+1);
+    const sel = document.createElement('select'); sel.className='team-select'; sel.dataset.slot=i;
+    const empty = document.createElement('option'); empty.value=0; empty.textContent='— пусто —'; sel.appendChild(empty);
+    {% for t in teams %}
+      const o{{ loop.index0 }} = document.createElement('option'); o{{ loop.index0 }}.value='{{ t.id }}'; o{{ loop.index0 }}.textContent='{{ t.name }}'; sel.appendChild(o{{ loop.index0 }});
+    {% endfor %}
+    if (INITIAL_SLOTS[i] && INITIAL_SLOTS[i] !== 0) {
+      sel.value = INITIAL_SLOTS[i];
+    }
+    div.appendChild(label); div.appendChild(sel); teamSlots.appendChild(div);
+  }
+}
+
+function getTeamIds(){
+  const sels = document.querySelectorAll('.team-select');
+  return Array.from(sels).map(s=>parseInt(s.value||0));
+}
+
+function buildTable(){
+  const teamIds = getTeamIds();
+  const n = teamIds.length;
+  const teams = Array.from(document.querySelectorAll('.team-select')).map(s=>s.options[s.selectedIndex].text);
+  if (teamIds.some(id => id === 0)) {
+    editorStatus.textContent = 'Статус: заполните все слоты командами, чтобы увидеть матрицу и сохранить очки.';
+  } else {
+    editorStatus.textContent = 'Статус: матрица готова. Нажмите на любую ячейку, чтобы сохранить очки.';
+  }
+  let html = '<table class="rr-table">';
+  html += '<thead><tr><th></th>' + teams.map(t=>'<th>'+t+'</th>').join('') + '</tr></thead><tbody>';
+  for (let i=0;i<n;i++){
+    html += '<tr>'; html += '<th>'+teams[i]+'</th>';
+    for (let j=0;j<n;j++){
+      if (i==j){ html += '<td>—</td>'; }
+      else {
+        const a = Math.min(i,j);
+        const b = Math.max(i,j);
+        const teamA = teamIds[a];
+        const teamB = teamIds[b];
+        const key = Math.min(teamA, teamB) + '_' + Math.max(teamA, teamB);
+        const altKey = Math.max(teamA, teamB) + '_' + Math.min(teamA, teamB);
+        const m = MATRIX[key] || MATRIX[altKey];
+        let cell = '';
+        if (m){
+          // determine whether the row team corresponds to team_a or team_b in stored match
+          let rowSide = null;
+          let raw = null;
+          if (m.team_a_id === teamIds[i]) { rowSide = 'a'; raw = m.score_a; }
+          else if (m.team_b_id === teamIds[i]) { rowSide = 'b'; raw = m.score_b; }
+          else { rowSide = teamIds[i] === Math.min(teamA, teamB) ? 'a' : 'b'; raw = null; }
+          const value = (raw === null || raw === undefined) ? '—' : raw;
+          cell = `<div class="editable" data-key="${key}" data-a="${i}" data-b="${j}" data-row="${rowSide}">${value}</div>`;
+        } else {
+          const rowSide = teamIds[i] === Math.min(teamA, teamB) ? 'a' : 'b';
+          cell = `<div class="editable" data-key="${key}" data-a="${i}" data-b="${j}" data-row="${rowSide}">—</div>`;
+        }
+        html += '<td>'+cell+'</td>';
+      }
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  tableWrap.innerHTML = html;
+  attachEditable();
+}
+
+
+function attachEditable(){
+  document.querySelectorAll('.editable').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const key = el.dataset.key;
+      const a = parseInt(el.dataset.a), b=parseInt(el.dataset.b);
+      const teamIds = getTeamIds();
+      const teamA = teamIds[a];
+      const teamB = teamIds[b];
+      if (!teamA || !teamB) { alert('Выберите команды в обоих слотах'); return; }
+      if (teamA === teamB) { alert('Нужно выбрать разные команды для матча'); return; }
+      const realKey = Math.min(teamA, teamB) + '_' + Math.max(teamA, teamB);
+      const altKey = Math.max(teamA, teamB) + '_' + Math.min(teamA, teamB);
+      const m = MATRIX[realKey] || MATRIX[altKey] || { score_a: null, score_b: null };
+      const rowSide = el.dataset.row;
+      const currentScore = rowSide === 'a' ? m.score_a : m.score_b;
+      const otherScore = rowSide === 'a' ? m.score_b : m.score_a;
+      // create inline editor with only 0/1 options
+      const wrapper = document.createElement('div');
+      const select = document.createElement('select');
+      select.style.width = '80px';
+      const optionDash = document.createElement('option'); optionDash.value = 'null'; optionDash.textContent = '—';
+      const option0 = document.createElement('option'); option0.value = '0'; option0.textContent = '0';
+      const option1 = document.createElement('option'); option1.value = '1'; option1.textContent = '1';
+      select.appendChild(optionDash);
+      select.appendChild(option0);
+      select.appendChild(option1);
+      if (currentScore === null || currentScore === undefined) {
+        select.value = 'null';
+      } else {
+        select.value = String(currentScore);
+      }
+      const save = document.createElement('button'); save.textContent='Сохранить';
+      wrapper.appendChild(select); wrapper.appendChild(save);
+      el.replaceWith(wrapper);
+      const doSave = () => {
+        const points = select.value === 'null' ? null : parseInt(select.value || '0', 10);
+        const form = new FormData();
+        form.append('game_id', gameId);
+        form.append('match_key', realKey);
+        const sortedA = Math.min(teamA, teamB);
+        const sortedB = Math.max(teamA, teamB);
+        form.append('team_a_id', sortedA);
+        form.append('team_b_id', sortedB);
+        const complement = points === null ? null : (points === 1 ? 0 : 1);
+        const sendA = rowSide === 'a' ? (points === null ? 'null' : String(points)) : (complement === null ? 'null' : String(complement));
+        const sendB = rowSide === 'a' ? (complement === null ? 'null' : String(complement)) : (points === null ? 'null' : String(points));
+        form.append('score_a', sendA);
+        form.append('score_b', sendB);
+        fetch('/admin/round_robin_save', { method:'POST', body: form}).then(r=>r.json()).then(j=>{
+          if (j.status=='ok'){
+            const savedA = rowSide === 'a' ? points : complement;
+            const savedB = rowSide === 'a' ? complement : points;
+            MATRIX[realKey] = {team_a_id: sortedA, team_b_id: sortedB, score_a: savedA, score_b: savedB};
+            if (points === null) {
+              MATRIX[realKey].score_a = null;
+              MATRIX[realKey].score_b = null;
+            }
+            if (altKey in MATRIX) { delete MATRIX[altKey]; }
+            editorStatus.textContent = `Сохранено: команда ${teamA} vs команда ${teamB} = ${points}`;
+            buildTable();
+          } else {
+            editorStatus.textContent = 'Ошибка сохранения. Попробуйте ещё раз.';
+          }
+        }).catch(()=>editorStatus.textContent = 'Ошибка сети при сохранении.');
+      };
+      select.addEventListener('change', doSave);
+      save.addEventListener('click', (evt)=>{ evt.preventDefault(); doSave(); });
+    });
+  });
+}
+
+// initial matrix from server
+const MATRIX = {
+  {% for k,m in matrix.items() %}
+    "{{ k }}": { team_a_id: {{ m.team_a_id or 'null' }}, team_b_id: {{ m.team_b_id or 'null' }}, score_a: {{ m.score_a if m.score_a is not none else 'null' }}, score_b: {{ m.score_b if m.score_b is not none else 'null' }} },
+  {% endfor %}
+};
+
+// normalize matrix keys in case old rows use reversed match_key order
+for (const originalKey of Object.keys(MATRIX)) {
+  const [a, b] = originalKey.split('_').map(Number);
+  const normalizedKey = Math.min(a, b) + '_' + Math.max(a, b);
+  if (normalizedKey !== originalKey && !(normalizedKey in MATRIX)) {
+    MATRIX[normalizedKey] = MATRIX[originalKey];
+  }
+}
+
+function attachSlotListeners(){
+  document.querySelectorAll('.team-select').forEach(select=>{
+    select.removeEventListener('change', buildTable);
+    select.addEventListener('change', buildTable);
+  });
+}
+
+applyBtn.addEventListener('click', (e)=>{
+  e.preventDefault();
+  const n = parseInt(nTeamsSelect.value);
+  const url = new URL(window.location.href);
+  url.searchParams.set('n_teams', n);
+  window.location.href = url.toString();
+});
+
+// if template produced initial slots, attach events
+if (document.querySelectorAll('.team-select').length>0){
+  attachSlotListeners();
+  buildTable();
+}
+</script>
+
+{% endblock %}
