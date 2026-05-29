@@ -217,3 +217,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 картинки/МакетГлавной.psd
+
+
+#БД
+olympiad.db
