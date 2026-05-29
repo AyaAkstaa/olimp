@@ -134,6 +134,7 @@
     {% endif %}
 </div>
 
+{% if game.slug == 'geoguessr' %}
 <div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
     <h2 style="color: var(--danger); margin-top: 0;">Круговик</h2>
     {% if is_admin and game.slug == 'geoguessr' %}
@@ -186,6 +187,7 @@
     <p style="color:#ddd;">Публичных матчей круговика пока нет. Добавьте их в админке.</p>
     {% endif %}
 </div>
+{% endif %}
 
 <div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
     <h2 style="color: var(--danger); margin-top: 0;">{% if game.slug == 'geoguessr' %}Все против всех{% else %}Результаты по этапам{% endif %}</h2>
