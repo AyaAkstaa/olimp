@@ -1,5 +1,5 @@
-﻿from fastapi import FastAPI, Request, Form, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
+﻿from fastapi import FastAPI, Request, Form, Depends, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
@@ -156,6 +156,8 @@ env = Environment(
     autoescape=select_autoescape(["html", "xml"]),
     cache_size=0,
 )
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 def render_template(name: str, **context):
@@ -604,3 +606,22 @@ def view_round(request: Request, round_id: int, db: Session = Depends(get_db)):
         matrix[matrix_key] = m
 
     return render_template("round.html", request=request, round=r, players=players, matrix=matrix)
+
+
+# 1. Эндпоинт страницы, где будет открываться видео
+@app.get("/watch")
+async def watch_video_page(request: Request):
+    return render_template("video.html", request=request)
+
+# 2. Эндпоинт, который стримит сам видеофайл
+@app.get("/api/video")
+async def get_video_stream():
+    # Укажи правильный путь к своему видеофайлу в папке static
+    video_path = BASE_DIR / "картинки" / "main" / "mult.mp4"
+    
+    # Небольшая проверка для подстраховки (выведет точный путь в консоль, если файла нет)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail=f"Видео не найдено по пути: {video_path}")
+    
+    # FileResponse в FastAPI автоматически поддерживает Range-запросы для перемотки
+    return FileResponse(str(video_path), media_type="video/mp4")

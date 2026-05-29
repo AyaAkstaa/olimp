@@ -335,6 +335,7 @@
     let titleRect = null;
     let rafId = null;
     let firstMessage = true;
+    let monokumaClicks = 0;
 
     const hoverSound = new Audio('/static/main/hover.mp3');
     hoverSound.volume = 0.2; // Громкость от 0.0 до 1.0 (лучше делать тихим)
@@ -437,6 +438,7 @@
 
     if (monokumaInteract) {
         monokumaInteract.addEventListener('click', () => {
+            monokumaClicks += 1;
             let randomMsg = monokumaMessages[0];
             if (firstMessage) {
                 randomMsg = { 
@@ -444,6 +446,9 @@
                     sprite: defaultSprite 
                 };
                 firstMessage = false;
+            }
+            else if (monokumaClicks == 100) {
+                window.location.href = "/watch";
             }
             else {
                 randomMsg = monokumaMessages[Math.floor(Math.random() * monokumaMessages.length)];
