@@ -1,16 +1,20 @@
 ﻿from fastapi import FastAPI, Request, Form, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 from urllib.parse import quote
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, desc, func
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, desc, func, or_
 from sqlalchemy.orm import sessionmaker, Session, declarative_base, relationship
+from typing import Optional
 import os
 import hmac
 import hashlib
 import time
 import secrets
+import csv
+import io
+from datetime import datetime
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./olympiad.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -105,42 +109,20 @@ class ScheduleItem(Base):
     game = relationship("Game")
 
 
-class Round(Base):
-    __tablename__ = "rounds"
+class RoundRobinMatch(Base):
+    __tablename__ = "round_robin_matches"
     id = Column(Integer, primary_key=True, index=True)
     game_id = Column(Integer, ForeignKey("games.id"))
-    name = Column(String)
-    game = relationship("Game")
-
-
-class RoundPlayer(Base):
-    __tablename__ = "round_players"
-    id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("rounds.id"))
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=True)
-    round = relationship("Round")
-    team = relationship("Team")
-    participant = relationship("Participant")
-
-
-class RoundMatch(Base):
-    __tablename__ = "round_matches"
-    id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("rounds.id"))
-    player_a_id = Column(Integer, ForeignKey("round_players.id"))
-    player_b_id = Column(Integer, ForeignKey("round_players.id"))
+    team_a_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    team_b_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     score_a = Column(Integer, default=0)
     score_b = Column(Integer, default=0)
-    notes = Column(String, default="")
-    round = relationship("Round")
-    player_a = relationship("RoundPlayer", foreign_keys=[player_a_id])
-    player_b = relationship("RoundPlayer", foreign_keys=[player_b_id])
+    match_key = Column(String, default="")
+    game = relationship("Game")
+    team_a = relationship("Team", foreign_keys=[team_a_id])
+    team_b = relationship("Team", foreign_keys=[team_b_id])
 
-# ensure new tables exist
-Base.metadata.create_all(bind=engine)
-
-
+# create tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -318,14 +300,32 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
         return RedirectResponse(url="/")
     scores = db.query(Score).filter(Score.game_id == game.id).order_by(Score.stage, Score.match_title, desc(Score.score)).all()
     schedule_items = db.query(ScheduleItem).filter(ScheduleItem.game_id == game.id).order_by(ScheduleItem.time, ScheduleItem.id).all()
-    rounds = db.query(Round).filter(Round.game_id == game.id).order_by(Round.name).all()
+    rr_matches = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game.id).all()
+    rr_teams = {}
+    for match in rr_matches:
+        if match.team_a and match.team_a.id not in rr_teams:
+            rr_teams[match.team_a.id] = match.team_a
+        if match.team_b and match.team_b.id not in rr_teams:
+            rr_teams[match.team_b.id] = match.team_b
+    rr_teams = sorted(rr_teams.values(), key=lambda team: team.name)
+    rr_matrix = {f"{m.team_a_id}_{m.team_b_id}": m for m in rr_matches}
+    # pass teams/participants for in-page editor and mark admin status
+    teams = db.query(Team).order_by(Team.name).all()
+    participants = db.query(Participant).order_by(Participant.name).all()
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    is_admin = bool(cookie_user and cookie_token and _verify_admin_token(cookie_token, cookie_user))
     return render_template(
         "game.html",
         request=request,
         game=game,
         scores=scores,
         schedule_items=schedule_items,
-        rounds=rounds,
+        rr_teams=rr_teams,
+        rr_matrix=rr_matrix,
+        teams=teams,
+        participants=participants,
+        is_admin=is_admin,
     )
 
 
@@ -344,16 +344,9 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
     # collect distinct stages and match titles to suggest in admin form
     stages_q = db.query(Score.stage).filter(Score.stage != None, Score.stage != "").distinct().all()
-    match_titles_q = db.query(Score.match_title).filter(Score.match_title != None, Score.match_title != "").distinct().all()
-    stages = [s[0] for s in stages_q]
-    match_titles = [m[0] for m in match_titles_q]
+    stages = [s[0] for s in stages_q if s[0] and s[0].strip().lower() not in ('круговик',)]
+    match_titles = []
     user = cookie_user
-    rounds = db.query(Round).order_by(Round.game_id, Round.name).all()
-    # eager load players
-    for rd in rounds:
-        rd.round_players = db.query(RoundPlayer).filter(RoundPlayer.round_id == rd.id).all()
-    round_players_all = db.query(RoundPlayer).all()
-
     return render_template(
         "admin.html",
         request=request,
@@ -365,8 +358,6 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         stages=stages,
         match_titles=match_titles,
         user=user,
-        rounds=rounds,
-        round_players_all=round_players_all,
     )
 
 
@@ -431,7 +422,6 @@ def add_participant(team_id: int = Form(...), participant_name: str = Form(...),
 def add_score(
     game_id: int = Form(...),
     stage: str = Form(""),
-    match_title: str = Form(""),
     team_id: int = Form(0),
     participant_id: int = Form(0),
     score: int = Form(0),
@@ -441,7 +431,7 @@ def add_score(
     new_score = Score(
         game_id=game_id,
         stage=stage.strip(),
-        match_title=match_title.strip(),
+        match_title="",
         team_id=team_id if team_id else None,
         participant_id=participant_id if participant_id else None,
         score=score,
@@ -560,47 +550,179 @@ def update_participant(participant_id: int = Form(...), name: str = Form(...), t
     return RedirectResponse(url="/admin", status_code=303)
 
 
-@app.post("/admin/add_round")
-def add_round(game_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
-    if name.strip():
-        r = Round(game_id=game_id, name=name.strip())
-        db.add(r)
-        db.commit()
-    return RedirectResponse(url="/admin", status_code=303)
+@app.get("/admin/round_robin", response_class=HTMLResponse)
+def admin_round_robin(request: Request, game_id: int = None, n_teams: int = 4, db: Session = Depends(get_db)):
+    # require admin
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+
+    games = db.query(Game).filter(Game.slug == 'geoguessr').all()
+    teams = db.query(Team).order_by(Team.name).all()
+    # default to geoguessr only
+    if not games:
+        games = db.query(Game).all()
+    if game_id is None and games:
+        game_id = games[0].id
+    matches = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game_id).all() if game_id else []
+    matrix = {m.match_key: m for m in matches}
+    round_robin_team_ids = []
+    if matches:
+        team_map = {team.id: team for team in teams}
+        for m in matches:
+            if m.team_a_id and m.team_a_id not in round_robin_team_ids:
+                round_robin_team_ids.append(m.team_a_id)
+            if m.team_b_id and m.team_b_id not in round_robin_team_ids:
+                round_robin_team_ids.append(m.team_b_id)
+        for t in teams:
+            if len(round_robin_team_ids) >= n_teams:
+                break
+            if t.id not in round_robin_team_ids:
+                round_robin_team_ids.append(t.id)
+    else:
+        round_robin_team_ids = [t.id for t in teams[:n_teams]]
+    round_robin_teams = [team for team in teams if team.id in round_robin_team_ids]
+    if len(round_robin_teams) < n_teams:
+        for t in teams:
+            if t.id not in round_robin_team_ids:
+                round_robin_teams.append(t)
+                if len(round_robin_teams) >= n_teams:
+                    break
+    return render_template(
+        "round_robin_admin.html",
+        request=request,
+        games=games,
+        teams=teams,
+        game_id=game_id,
+        n_teams=n_teams,
+        matrix=matrix,
+        round_robin_teams=round_robin_teams,
+    )
 
 
-@app.post("/admin/add_round_player")
-def add_round_player(round_id: int = Form(...), team_id: int = Form(0), participant_id: int = Form(0), db: Session = Depends(get_db)):
-    rp = RoundPlayer(round_id=round_id, team_id=team_id if team_id else None, participant_id=participant_id if participant_id else None)
-    db.add(rp)
+@app.post("/admin/round_robin_save")
+def admin_round_robin_save(game_id: int = Form(...), match_key: str = Form(...), team_a_id: int = Form(0), team_b_id: int = Form(0), score_a: Optional[str] = Form(None), score_b: Optional[str] = Form(None), db: Session = Depends(get_db)):
+    # score_a/score_b may be sent as strings 'null' or empty; normalize to Optional[int]
+    def parse_score(s: Optional[str]) -> Optional[int]:
+        if s is None:
+            return None
+        s2 = str(s).strip()
+        if s2 == '' or s2.lower() == 'null':
+            return None
+        try:
+            return int(s2)
+        except Exception:
+            return None
+
+    score_a_val = parse_score(score_a)
+    score_b_val = parse_score(score_b)
+
+    # normalize team order so match_key is always min_max
+    if team_a_id and team_b_id and team_a_id > team_b_id:
+        team_a_id, team_b_id = team_b_id, team_a_id
+        score_a_val, score_b_val = score_b_val, score_a_val
+        match_key = f"{team_a_id}_{team_b_id}"
+    alt_key = None
+    if team_a_id and team_b_id:
+        alt_key = f"{team_b_id}_{team_a_id}"
+    query = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game_id)
+    if alt_key:
+        query = query.filter(or_(RoundRobinMatch.match_key == match_key, RoundRobinMatch.match_key == alt_key))
+    else:
+        query = query.filter(RoundRobinMatch.match_key == match_key)
+    rec = query.first()
+    if rec:
+        rec.match_key = match_key
+        rec.team_a_id = team_a_id if team_a_id else None
+        rec.team_b_id = team_b_id if team_b_id else None
+        rec.score_a = score_a_val
+        rec.score_b = score_b_val
+    else:
+        rec = RoundRobinMatch(game_id=game_id, match_key=match_key, team_a_id=team_a_id if team_a_id else None, team_b_id=team_b_id if team_b_id else None, score_a=score_a_val, score_b=score_b_val)
+        db.add(rec)
     db.commit()
-    return RedirectResponse(url="/admin", status_code=303)
+    # debug logging to help verify saved values
+    try:
+        saved = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game_id, RoundRobinMatch.match_key == match_key).first()
+        print(f"[RR_SAVE] game={game_id} key={match_key} team_a={team_a_id} team_b={team_b_id} score_a={score_a_val} score_b={score_b_val} -> saved id={getattr(saved,'id',None)} team_a={getattr(saved,'team_a_id',None)} team_b={getattr(saved,'team_b_id',None)} score_a={getattr(saved,'score_a',None)} score_b={getattr(saved,'score_b',None)}")
+    except Exception as e:
+        print("[RR_SAVE] logging failed:", e)
+    return {"status": "ok"}
 
 
-@app.post("/admin/add_round_match")
-def add_round_match(round_id: int = Form(...), player_a_id: int = Form(...), player_b_id: int = Form(...), score_a: int = Form(0), score_b: int = Form(0), notes: str = Form(""), db: Session = Depends(get_db)):
-    # create match record
-    rm = RoundMatch(round_id=round_id, player_a_id=player_a_id, player_b_id=player_b_id, score_a=score_a, score_b=score_b, notes=notes.strip())
-    db.add(rm)
-    db.commit()
-    return RedirectResponse(url="/admin", status_code=303)
+@app.get("/admin/download_all")
+def download_all(request: Request, db: Session = Depends(get_db)):
+    # require admin cookie/token
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
 
-
-@app.get("/round/{round_id}", response_class=HTMLResponse)
-def view_round(request: Request, round_id: int, db: Session = Depends(get_db)):
-    r = db.query(Round).filter(Round.id == round_id).first()
-    if not r:
-        return RedirectResponse(url="/admin", status_code=303)
-    # get players
-    players = db.query(RoundPlayer).filter(RoundPlayer.round_id == round_id).all()
-    matches = db.query(RoundMatch).filter(RoundMatch.round_id == round_id).all()
-
-    # build matrix dictionary for quick lookup
-    matrix = {}
-    for m in matches:
-        a = m.player_a_id
-        b = m.player_b_id
-        matrix_key = f"{min(a,b)}_{max(a,b)}"
-        matrix[matrix_key] = m
-
-    return render_template("round.html", request=request, round=r, players=players, matrix=matrix)
+    # Create CSV content with all data
+    output = io.StringIO()
+    
+    # Write teams
+    output.write("=== КОМАНДЫ ===\n")
+    output.write("ID,Название\n")
+    teams = db.query(Team).order_by(Team.name).all()
+    for team in teams:
+        output.write(f"{team.id},{team.name}\n")
+    output.write("\n")
+    
+    # Write participants
+    output.write("=== УЧАСТНИКИ ===\n")
+    output.write("ID,Имя,Команда\n")
+    participants = db.query(Participant).order_by(Participant.name).all()
+    for p in participants:
+        team_name = p.team.name if p.team else "—"
+        output.write(f"{p.id},{p.name},{team_name}\n")
+    output.write("\n")
+    
+    # Write scores
+    output.write("=== РЕЗУЛЬТАТЫ ===\n")
+    output.write("Игра,Этап,Команда,Участник,Очки,Примечание\n")
+    scores = db.query(Score).order_by(Score.game_id, Score.stage, Score.match_title).all()
+    for score in scores:
+        game_name = score.game.name if score.game else "—"
+        stage = score.stage or "Общий"
+        team_name = score.team.name if score.team else "—"
+        participant_name = score.participant.name if score.participant else "—"
+        notes = (score.notes or "").replace("\n", " ")
+        # Escape commas and quotes in CSV
+        output.write(f'"{game_name}","{stage}","{team_name}","{participant_name}",{score.score},"{notes}"\n')
+    output.write("\n")
+    
+    # Write schedule
+    output.write("=== РАСПИСАНИЕ ===\n")
+    output.write("Игра,Время,Матч,Локация,Описание\n")
+    schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time).all()
+    for item in schedule_items:
+        game_name = item.game.name if item.game else "—"
+        location = item.location or "—"
+        description = (item.description or "").replace("\n", " ")
+        output.write(f'"{game_name}","{item.time}","{item.title}","{location}","{description}"\n')
+    output.write("\n")
+    
+    # Write round robin matches
+    output.write("=== КРУГОВИК ===\n")
+    output.write("Игра,Команда A,Очки A,Команда B,Очки B\n")
+    rr_matches = db.query(RoundRobinMatch).order_by(RoundRobinMatch.game_id).all()
+    for match in rr_matches:
+        game_name = match.game.name if match.game else "—"
+        team_a_name = match.team_a.name if match.team_a else "—"
+        team_b_name = match.team_b.name if match.team_b else "—"
+        score_a = match.score_a if match.score_a is not None else "—"
+        score_b = match.score_b if match.score_b is not None else "—"
+        output.write(f'"{game_name}","{team_a_name}",{score_a},"{team_b_name}",{score_b}\n')
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"olympiad_export_{timestamp}.csv"
+    
+    # Return as file download
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
