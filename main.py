@@ -15,6 +15,8 @@ import secrets
 import csv
 import io
 from datetime import datetime
+import traceback
+from sqlalchemy.exc import IntegrityError
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./olympiad.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -559,6 +561,253 @@ async def add_score_inline(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(rec)
     return JSONResponse({"status": "ok", "score_id": rec.id})
+
+
+@app.post("/admin/scores_batch_minecraft")
+async def scores_batch_minecraft(request: Request, db: Session = Depends(get_db)):
+    # admin-only
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception as e:
+        return JSONResponse({"error": "invalid_json", "detail": str(e)}, status_code=400)
+
+    game_id = payload.get('game_id')
+    if not game_id:
+        return JSONResponse({"error": "missing_game_id"}, status_code=400)
+
+    ops = payload.get('ops', [])
+    if not isinstance(ops, list):
+        return JSONResponse({"error": "invalid_ops"}, status_code=400)
+
+    added = 0
+    updated = 0
+    deleted = 0
+
+    try:
+        op_results = []
+        for idx, it in enumerate(ops):
+            typ = (it.get('op') or '').strip().lower()
+            stage = (it.get('stage') or '').strip()
+            score_val = it.get('score')
+            try:
+                score_val = int(score_val)
+            except Exception:
+                score_val = 0
+
+            team_id = it.get('team_id')
+            team_name = (it.get('team_name') or '').strip()
+
+            # resolve or create team if necessary
+            resolved_team_id = None
+            if team_id:
+                try:
+                    resolved_team_id = int(team_id)
+                    t = db.query(Team).filter(Team.id == resolved_team_id).first()
+                    if not t:
+                        resolved_team_id = None
+                except Exception:
+                    resolved_team_id = None
+
+            if not resolved_team_id and team_name:
+                all_teams = db.query(Team).all()
+                t = db.query(Team).filter(Team.name == team_name).first()
+                if not t:
+                    print(f"    Team not found, creating...")
+                    try:
+                        t = Team(name=team_name)
+                        db.add(t)
+                        db.commit()
+                        db.refresh(t)
+                        print(f"    Created team: id={t.id}, name={t.name}")
+                    except IntegrityError:
+                        db.rollback()
+                        t = db.query(Team).filter(Team.name == team_name).first()
+                        print(f"    IntegrityError caught, re-queried: {t}")
+                resolved_team_id = t.id if t else None
+            
+
+            if typ == 'add':
+                rec = Score(game_id=game_id, stage=stage, match_title='', team_id=resolved_team_id if resolved_team_id else None, participant_id=None, score=score_val, notes='')
+                db.add(rec)
+                added += 1
+                op_results.append({'op': 'add', 'team_id': resolved_team_id, 'team_name': team_name, 'score': score_val})
+
+            elif typ == 'update':
+                # normalize: update/create a single team-scoped score for this stage
+                if not resolved_team_id and team_name:
+                    # create team if missing
+                    t = db.query(Team).filter(Team.name == team_name).first()
+                    if not t:
+                        try:
+                            t = Team(name=team_name)
+                            db.add(t)
+                            db.commit()
+                            db.refresh(t)
+                        except IntegrityError:
+                            db.rollback()
+                            t = db.query(Team).filter(Team.name == team_name).first()
+                    resolved_team_id = t.id if t else None
+
+                if resolved_team_id:
+                    rec = db.query(Score).filter(Score.game_id == game_id, Score.team_id == resolved_team_id, Score.stage == stage, Score.participant_id == None).first()
+                    if rec:
+                        rec.score = score_val
+                        updated += 1
+                        op_results.append({'op': 'update', 'team_id': resolved_team_id, 'team_name': team_name, 'score': score_val})
+                    else:
+                        rec = Score(game_id=game_id, stage=stage, match_title='', team_id=resolved_team_id, participant_id=None, score=score_val, notes='')
+                        db.add(rec)
+                        added += 1
+                        op_results.append({'op': 'add_from_update', 'team_id': resolved_team_id, 'team_name': team_name, 'score': score_val})
+
+            elif typ == 'delete':
+                # delete scores for this team/stage — include team-scoped and participant-scoped scores
+                target_team_id = resolved_team_id
+                if not target_team_id and team_name:
+                    t = db.query(Team).filter(Team.name == team_name).first()
+                    if t:
+                        target_team_id = t.id
+
+                if target_team_id:
+                    print(f"    Searching Scores for delete: game_id={game_id}, target_team_id={target_team_id}, stage={stage}")
+                    # delete Score rows where Score.team_id == target_team_id OR Score.participant_id refers to a participant with that team_id
+                    rows = (
+                        db.query(Score)
+                        .outerjoin(Participant, Score.participant_id == Participant.id)
+                        .filter(
+                            Score.game_id == game_id,
+                            Score.stage == stage,
+                            or_(Score.team_id == target_team_id, Participant.team_id == target_team_id),
+                        )
+                        .all()
+                    )
+                    print(f"    Found {len(rows)} rows to delete")
+                else:
+                    print(f"    No target_team_id found for delete")
+                    rows = []
+
+                for r in rows:
+                    db.delete(r)
+                    deleted += 1
+                    op_results.append({'op': 'delete', 'score_id': r.id, 'team_id': r.team_id, 'team_name': (r.team.name if r.team else None), 'participant_id': r.participant_id})
+
+        if added or updated or deleted:
+            db.commit()
+
+        return JSONResponse({"status": "ok", "added": added, "updated": updated, "deleted": deleted, "op_results": op_results})
+    except Exception:
+        tb = traceback.format_exc()
+        print("scores_batch_minecraft error:\n", tb)
+        return JSONResponse({"error": "server_exception", "detail": tb}, status_code=500)
+
+
+@app.post("/admin/scores_batch_minecraft")
+async def scores_batch_minecraft(request: Request, db: Session = Depends(get_db)):
+    # admin-only
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    game_id = payload.get('game_id')
+    if not game_id:
+        return JSONResponse({"error": "missing_game_id"}, status_code=400)
+
+    ops = payload.get('ops', [])
+    added = 0
+    updated = 0
+    deleted = 0
+
+    for it in ops:
+        typ = (it.get('op') or '').strip().lower()
+        stage = (it.get('stage') or '').strip()
+        score_val = it.get('score')
+        try:
+            score_val = int(score_val)
+        except Exception:
+            score_val = 0
+
+        team_id = it.get('team_id')
+        team_name = (it.get('team_name') or '').strip()
+
+        # resolve or create team if necessary
+        resolved_team_id = None
+        if team_id:
+            try:
+                resolved_team_id = int(team_id)
+                t = db.query(Team).filter(Team.id == resolved_team_id).first()
+                if not t:
+                    resolved_team_id = None
+            except Exception:
+                resolved_team_id = None
+
+        if not resolved_team_id and team_name:
+            t = db.query(Team).filter(func.lower(Team.name) == team_name.lower()).first()
+            if not t:
+                t = Team(name=team_name)
+                db.add(t)
+                db.commit()
+                db.refresh(t)
+            resolved_team_id = t.id
+
+        if typ == 'add':
+            rec = Score(game_id=game_id, stage=stage, match_title='', team_id=resolved_team_id if resolved_team_id else None, participant_id=None, score=score_val, notes='')
+            db.add(rec)
+            added += 1
+
+        elif typ == 'update':
+            # normalize: update/create a single team-scoped score for this stage
+            if not resolved_team_id and team_name:
+                # create team if missing
+                t = db.query(Team).filter(func.lower(Team.name) == team_name.lower()).first()
+                if not t:
+                    t = Team(name=team_name)
+                    db.add(t)
+                    db.commit()
+                    db.refresh(t)
+                resolved_team_id = t.id
+
+            if resolved_team_id:
+                rec = db.query(Score).filter(Score.game_id == game_id, Score.team_id == resolved_team_id, Score.stage == stage, Score.participant_id == None).first()
+                if rec:
+                    rec.score = score_val
+                    updated += 1
+                else:
+                    rec = Score(game_id=game_id, stage=stage, match_title='', team_id=resolved_team_id, participant_id=None, score=score_val, notes='')
+                    db.add(rec)
+                    added += 1
+
+        elif typ == 'delete':
+            # delete team-scoped scores for this stage
+            q = db.query(Score).filter(Score.game_id == game_id, Score.stage == stage, Score.participant_id == None)
+            if resolved_team_id:
+                q = q.filter(Score.team_id == resolved_team_id)
+            elif team_name:
+                # find team ids matching name
+                t = db.query(Team).filter(func.lower(Team.name) == team_name.lower()).first()
+                if t:
+                    q = q.filter(Score.team_id == t.id)
+                else:
+                    q = q.filter(Score.id == None)  # no-op
+            rows = q.all()
+            for r in rows:
+                db.delete(r)
+                deleted += 1
+
+    if added or updated or deleted:
+        db.commit()
+
+    return JSONResponse({"status": "ok", "added": added, "updated": updated, "deleted": deleted})
 
 
 @app.post("/admin/delete_score")
