@@ -216,8 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-картинки/МакетГлавной.psd
 
 
 #БД
 olympiad.db
+
+картинки/МакетГлавной.psd
+картинки/Карточки.psd
