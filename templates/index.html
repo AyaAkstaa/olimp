@@ -326,6 +326,7 @@
 </div>
 
 <script>
+    
     const titleImg = document.querySelector('.hero-title-img');
     const gameCards = document.querySelectorAll('.game-card');
     const clamp = v => Math.max(-12, Math.min(12, v));
@@ -333,6 +334,7 @@
     let mouseX = 0, mouseY = 0;
     let titleRect = null;
     let rafId = null;
+    let firstMessage = true;
 
     const hoverSound = new Audio('/static/main/hover.mp3');
     hoverSound.volume = 0.2; // Громкость от 0.0 до 1.0 (лучше делать тихим)
@@ -406,19 +408,27 @@
     // База фраз. Добавляй свои тексты и указывай нужный спрайт
     const monokumaMessages = [
         { 
-            text: "Пу-ху-ху! Добро пожаловать!", 
+            text: "ХВАТИТ МЕНЯ ТРОГАТЬ!!", 
+            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+        },
+        { 
+            text: "Руки убрал", 
+            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+        },
+        { 
+            text: "Куда я жмав", 
             sprite: defaultSprite 
         },
         { 
-            text: "Редиректа не будет, только отчаяние!", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+            text: "Если нажать 100 раз, то будет мультик", 
+            sprite: defaultSprite 
         },
         { 
-            text: "Ну и чё...", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+            text: "Парень...", 
+            sprite: defaultSprite 
         },
         { 
-            text: "Время наказания приближается!", 
+            text: "Отстань", 
             sprite: defaultSprite 
         }
     ];
@@ -427,8 +437,17 @@
 
     if (monokumaInteract) {
         monokumaInteract.addEventListener('click', () => {
-            // 1. Выбираем случайную фразу
-            const randomMsg = monokumaMessages[Math.floor(Math.random() * monokumaMessages.length)];
+            let randomMsg = monokumaMessages[0];
+            if (firstMessage) {
+                randomMsg = { 
+                    text: "Пу-ху-ху! Добро пожаловать!", 
+                    sprite: defaultSprite 
+                };
+                firstMessage = false;
+            }
+            else {
+                randomMsg = monokumaMessages[Math.floor(Math.random() * monokumaMessages.length)];
+            }
             
             // 2. Устанавливаем текст
             monokumaText.textContent = randomMsg.text;
