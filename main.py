@@ -1,5 +1,6 @@
 ﻿from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 from urllib.parse import quote
@@ -43,6 +44,14 @@ default_games = [
         "description": "лассика в новом формате. ыстрой свою линию и не дай шанса врагу.",
     },
 ]
+
+GAME_ASSETS = {
+    "geoguessr": "МакетГлавной_0001_Геогессер.png",
+    "minecraft": "МакетГлавной_0002_Майнкрафт.png",
+    "monopoly": "МакетГлавной_0003_Монополия.png",
+    "quiz": "МакетГлавной_0004_Квиз.png",
+    "tictactoe": "МакетГлавной_0005_Крестики.png",
+}
 
 
 class Game(Base):
@@ -99,6 +108,11 @@ class ScheduleItem(Base):
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+# serve local image assets from the картинка folder
+static_dir = Path(__file__).resolve().parent / "картинки"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 env = Environment(
@@ -181,13 +195,13 @@ def startup_event():
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request, db: Session = Depends(get_db)):
     games = db.query(Game).all()
-    return render_template("index.html", request=request, games=games)
+    return render_template("index.html", request=request, games=games, game_assets=GAME_ASSETS)
 
 
 @app.get("/olympiad", response_class=HTMLResponse)
 def read_olympiad(request: Request, db: Session = Depends(get_db)):
     games = db.query(Game).all()
-    return render_template("index.html", request=request, games=games)
+    return render_template("index.html", request=request, games=games, game_assets=GAME_ASSETS)
 
 
 @app.get("/schedule", response_class=HTMLResponse)

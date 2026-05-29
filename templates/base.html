@@ -19,16 +19,13 @@
         }
         html, body {
             margin: 0;
-            min-height: 100%;
+            padding: 0;
             font-family: 'Russo One', sans-serif;
-            background: radial-gradient(circle at top left, rgba(230,0,122,0.18), transparent 18%),
-                        radial-gradient(circle at bottom right, rgba(255,255,255,0.08), transparent 28%),
-                        linear-gradient(180deg, #0a0a0a 0%, #161616 100%);
             color: var(--white);
-            overflow-x: hidden;
+            overflow: hidden;
         }
         body {
-            background-attachment: fixed;
+            background: #0a0a0a;
         }
         ::selection {
             background: var(--danger);
@@ -42,10 +39,25 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 14px 36px;
+            padding: 10px 36px;
             position: sticky;
             top: 0;
-            z-index: 20;
+            z-index: 100;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-right: 20px;
+        }
+        .nav-brand img {
+            width: 48px;
+            height: auto;
+        }
+        .nav-brand span {
+            font-size: 0.95rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
         }
         .nav-links {
             display: flex;
@@ -139,6 +151,9 @@
             color: var(--white);
             font-size: 0.95rem;
         }
+        .index-page {
+            padding: 0 !important;
+        }
         @media (max-width: 840px) {
             .navbar { flex-direction: column; gap: 12px; align-items: stretch; padding: 20px; }
             .nav-links { justify-content: center; }
@@ -148,6 +163,10 @@
 <body>
 
     <nav class="navbar">
+        <div class="nav-brand">
+            <img src="/static/main/МакетГлавной_0010_лого.png" alt="лого олимпиады">
+            <span>Олимпиада</span>
+        </div>
         <div class="nav-links">
             <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Главная</a>
             <a href="/schedule" class="nav-link {% if request.url.path == '/schedule' %}active{% endif %}">Расписание</a>
@@ -157,9 +176,10 @@
         <a href="/register" class="auth-btn"><span>Регистрация</span></a>
     </nav>
 
-    <div class="container">
+    <div class="{% if request.url.path not in ['/', '/olympiad'] %}container{% endif %}">
         {% block content %}{% endblock %}
     </div>
 
 </body>
 </html>
+
