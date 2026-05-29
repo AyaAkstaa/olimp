@@ -2,24 +2,44 @@
 
 {% block content %}
 <style>
-     .full-viewport {
+    body {
         min-height: 100vh;
         display: flex;
         flex-direction: column;
-        background-image: url('/static/main/МакетГлавной_фон.png');
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
+        background-color: #000000;
         position: relative;
-        overflow: hidden;
+        /* РАЗРЕШАЕМ вертикальный скролл, но запрещаем горизонтальный */
+        overflow-y: auto;
+        overflow-x: hidden; 
     }
-    .full-viewport::before {
+
+    /* Наш живой параллакс-фон */
+    body::before {
         content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(135deg, rgba(0,0,0,0.15), rgba(0,0,0,0.08));
+        position: fixed; /* Фиксируем на экране */
+        top: 0;
+        left: 0;
+        width: 100%;
+        /* Даем запас по высоте (20% от экрана), чтобы при прокрутке снизу не оголялся черный фон */
+        height: 120vh; 
+        background-image: url('/static/main/МакетГлавной_0013_Кровь.png');
+        background-size: cover;
+        background-position: center top;
         pointer-events: none;
-        z-index: 1;
+        z-index: -2; /* Уводим в самый низ */
+        
+        will-change: transform; /* Подсказка браузеру задействовать видеокарту для плавности */
+        transform: translateY(var(--bg-scroll, 0px)); /* Переменная, которой будет управлять JS */
+    }
+
+    /* Слой сильного затемнения (остается статичным, чтобы не мерцал) */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.60));
+        pointer-events: none;
+        z-index: -1; /* Над картинкой, но под контентом */
     }
     .game-header { margin-bottom: 32px; }
     .game-subtitle {
@@ -108,7 +128,7 @@
     }
 </style>
 
-<div class="full-viewport">
+
 <div class="game-header">
     <div class="game-subtitle">Игра в центре внимания</div>
     <h1 class="title-splash">{{ game.name }}</h1>
@@ -308,7 +328,27 @@
     {% endif %}
 
 <a href="/" class="back-link">❮ Назад к списку игр</a>
-</div>
+
+<script>
+    // Оптимизированный параллакс фона
+    let scrollRaf = null;
+
+    window.addEventListener('scroll', () => {
+        if (scrollRaf === null) {
+            scrollRaf = requestAnimationFrame(() => {
+                // -0.15 — это скорость движения фона. 
+                // Он будет двигаться примерно в 7 раз медленнее основного контента.
+                const speed = -0.25; 
+                const offset = window.scrollY * speed;
+                
+                // Передаем значение в CSS
+                document.body.style.setProperty('--bg-scroll', `${offset}px`);
+                scrollRaf = null;
+            });
+        }
+    });
+</script>
+
 {% if is_admin and game.slug == 'geoguessr' %}
 <script>
     (function(){
