@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="{% if request.url.path == '/' %}no-scroll{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -159,9 +159,10 @@
             .navbar { flex-direction: column; gap: 12px; align-items: stretch; padding: 20px; }
             .nav-links { justify-content: center; }
         }
+        html.no-scroll, body.no-scroll { overflow: hidden; height: 100vh; }
     </style>
 </head>
-<body>
+<body class="{% if request.url.path == '/' %}no-scroll{% endif %}">
 
     <nav class="navbar">
         <div class="nav-brand">

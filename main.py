@@ -1,16 +1,20 @@
 ﻿from fastapi import FastAPI, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 from urllib.parse import quote
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, desc, func
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, desc, func, or_
 from sqlalchemy.orm import sessionmaker, Session, declarative_base, relationship
+from typing import Optional
 import os
 import hmac
 import hashlib
 import time
 import secrets
+import csv
+import io
+from datetime import datetime
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./olympiad.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -105,42 +109,20 @@ class ScheduleItem(Base):
     game = relationship("Game")
 
 
-class Round(Base):
-    __tablename__ = "rounds"
+class RoundRobinMatch(Base):
+    __tablename__ = "round_robin_matches"
     id = Column(Integer, primary_key=True, index=True)
     game_id = Column(Integer, ForeignKey("games.id"))
-    name = Column(String)
-    game = relationship("Game")
-
-
-class RoundPlayer(Base):
-    __tablename__ = "round_players"
-    id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("rounds.id"))
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=True)
-    round = relationship("Round")
-    team = relationship("Team")
-    participant = relationship("Participant")
-
-
-class RoundMatch(Base):
-    __tablename__ = "round_matches"
-    id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("rounds.id"))
-    player_a_id = Column(Integer, ForeignKey("round_players.id"))
-    player_b_id = Column(Integer, ForeignKey("round_players.id"))
+    team_a_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    team_b_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     score_a = Column(Integer, default=0)
     score_b = Column(Integer, default=0)
-    notes = Column(String, default="")
-    round = relationship("Round")
-    player_a = relationship("RoundPlayer", foreign_keys=[player_a_id])
-    player_b = relationship("RoundPlayer", foreign_keys=[player_b_id])
+    match_key = Column(String, default="")
+    game = relationship("Game")
+    team_a = relationship("Team", foreign_keys=[team_a_id])
+    team_b = relationship("Team", foreign_keys=[team_b_id])
 
-# ensure new tables exist
-Base.metadata.create_all(bind=engine)
-
-
+# create tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -320,14 +302,32 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
         return RedirectResponse(url="/")
     scores = db.query(Score).filter(Score.game_id == game.id).order_by(Score.stage, Score.match_title, desc(Score.score)).all()
     schedule_items = db.query(ScheduleItem).filter(ScheduleItem.game_id == game.id).order_by(ScheduleItem.time, ScheduleItem.id).all()
-    rounds = db.query(Round).filter(Round.game_id == game.id).order_by(Round.name).all()
+    rr_matches = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game.id).all()
+    rr_teams = {}
+    for match in rr_matches:
+        if match.team_a and match.team_a.id not in rr_teams:
+            rr_teams[match.team_a.id] = match.team_a
+        if match.team_b and match.team_b.id not in rr_teams:
+            rr_teams[match.team_b.id] = match.team_b
+    rr_teams = sorted(rr_teams.values(), key=lambda team: team.name)
+    rr_matrix = {f"{m.team_a_id}_{m.team_b_id}": m for m in rr_matches}
+    # pass teams/participants for in-page editor and mark admin status
+    teams = db.query(Team).order_by(Team.name).all()
+    participants = db.query(Participant).order_by(Participant.name).all()
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    is_admin = bool(cookie_user and cookie_token and _verify_admin_token(cookie_token, cookie_user))
     return render_template(
         "game.html",
         request=request,
         game=game,
         scores=scores,
         schedule_items=schedule_items,
-        rounds=rounds,
+        rr_teams=rr_teams,
+        rr_matrix=rr_matrix,
+        teams=teams,
+        participants=participants,
+        is_admin=is_admin,
     )
 
 
@@ -346,16 +346,9 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
     # collect distinct stages and match titles to suggest in admin form
     stages_q = db.query(Score.stage).filter(Score.stage != None, Score.stage != "").distinct().all()
-    match_titles_q = db.query(Score.match_title).filter(Score.match_title != None, Score.match_title != "").distinct().all()
-    stages = [s[0] for s in stages_q]
-    match_titles = [m[0] for m in match_titles_q]
+    stages = [s[0] for s in stages_q if s[0] and s[0].strip().lower() not in ('круговик',)]
+    match_titles = []
     user = cookie_user
-    rounds = db.query(Round).order_by(Round.game_id, Round.name).all()
-    # eager load players
-    for rd in rounds:
-        rd.round_players = db.query(RoundPlayer).filter(RoundPlayer.round_id == rd.id).all()
-    round_players_all = db.query(RoundPlayer).all()
-
     return render_template(
         "admin.html",
         request=request,
@@ -367,8 +360,6 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         stages=stages,
         match_titles=match_titles,
         user=user,
-        rounds=rounds,
-        round_players_all=round_players_all,
     )
 
 
@@ -433,7 +424,6 @@ def add_participant(team_id: int = Form(...), participant_name: str = Form(...),
 def add_score(
     game_id: int = Form(...),
     stage: str = Form(""),
-    match_title: str = Form(""),
     team_id: int = Form(0),
     participant_id: int = Form(0),
     score: int = Form(0),
@@ -443,7 +433,7 @@ def add_score(
     new_score = Score(
         game_id=game_id,
         stage=stage.strip(),
-        match_title=match_title.strip(),
+        match_title="",
         team_id=team_id if team_id else None,
         participant_id=participant_id if participant_id else None,
         score=score,
@@ -462,6 +452,113 @@ def update_score(score_id: int = Form(...), score: int = Form(...), notes: str =
         record.notes = notes.strip()
         db.commit()
     return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/update_scores_bulk")
+async def update_scores_bulk(request: Request, db: Session = Depends(get_db)):
+    # verify admin
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    items = payload.get("scores", [])
+    updated = 0
+    for it in items:
+        try:
+            sid = int(it.get("id"))
+        except Exception:
+            continue
+        rec = db.query(Score).filter(Score.id == sid).first()
+        if rec:
+            if "score" in it and it.get("score") is not None and it.get("score") != "":
+                try:
+                    rec.score = int(it.get("score"))
+                except Exception:
+                    pass
+            if "notes" in it:
+                rec.notes = str(it.get("notes") or "").strip()
+            updated += 1
+    if updated:
+        db.commit()
+    return JSONResponse({"status": "ok", "updated": updated})
+
+
+@app.post("/admin/add_score_inline")
+async def add_score_inline(request: Request, db: Session = Depends(get_db)):
+    # admin-only
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    game_id = payload.get('game_id')
+    if not game_id:
+        return JSONResponse({"error": "missing_game_id"}, status_code=400)
+
+    # determine or create team
+    team_id = payload.get('team_id')
+    team_name = payload.get('team_name')
+    if team_id:
+        try:
+            team_id = int(team_id)
+        except Exception:
+            team_id = None
+
+    if not team_id and team_name:
+        team_name = team_name.strip()
+        if team_name:
+            team = db.query(Team).filter(func.lower(Team.name) == team_name.lower()).first()
+            if not team:
+                team = Team(name=team_name)
+                db.add(team)
+                db.commit()
+                db.refresh(team)
+            team_id = team.id
+
+    # determine or create participant
+    participant_id = payload.get('participant_id')
+    participant_name = payload.get('participant_name')
+    if participant_id:
+        try:
+            participant_id = int(participant_id)
+        except Exception:
+            participant_id = None
+
+    if not participant_id and participant_name:
+        participant_name = participant_name.strip()
+        if participant_name:
+            participant = db.query(Participant).filter(Participant.name == participant_name).first()
+            if not participant:
+                participant = Participant(name=participant_name, team_id=team_id if team_id else None)
+                db.add(participant)
+                db.commit()
+                db.refresh(participant)
+            participant_id = participant.id
+
+    # score
+    try:
+        score_val = int(payload.get('score', 0))
+    except Exception:
+        score_val = 0
+
+    notes = payload.get('notes') or ''
+
+    rec = Score(game_id=game_id, stage='', match_title='', team_id=team_id if team_id else None, participant_id=participant_id if participant_id else None, score=score_val, notes=notes.strip())
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return JSONResponse({"status": "ok", "score_id": rec.id})
 
 
 @app.post("/admin/delete_score")
@@ -562,19 +659,97 @@ def update_participant(participant_id: int = Form(...), name: str = Form(...), t
     return RedirectResponse(url="/admin", status_code=303)
 
 
-@app.post("/admin/add_round")
-def add_round(game_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
-    if name.strip():
-        r = Round(game_id=game_id, name=name.strip())
-        db.add(r)
-        db.commit()
-    return RedirectResponse(url="/admin", status_code=303)
+@app.get("/admin/round_robin", response_class=HTMLResponse)
+def admin_round_robin(request: Request, game_id: int = None, n_teams: int = 4, db: Session = Depends(get_db)):
+    # require admin
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+
+    games = db.query(Game).filter(Game.slug == 'geoguessr').all()
+    teams = db.query(Team).order_by(Team.name).all()
+    # default to geoguessr only
+    if not games:
+        games = db.query(Game).all()
+    if game_id is None and games:
+        game_id = games[0].id
+    matches = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game_id).all() if game_id else []
+    matrix = {m.match_key: m for m in matches}
+    round_robin_team_ids = []
+    if matches:
+        team_map = {team.id: team for team in teams}
+        for m in matches:
+            if m.team_a_id and m.team_a_id not in round_robin_team_ids:
+                round_robin_team_ids.append(m.team_a_id)
+            if m.team_b_id and m.team_b_id not in round_robin_team_ids:
+                round_robin_team_ids.append(m.team_b_id)
+        for t in teams:
+            if len(round_robin_team_ids) >= n_teams:
+                break
+            if t.id not in round_robin_team_ids:
+                round_robin_team_ids.append(t.id)
+    else:
+        round_robin_team_ids = [t.id for t in teams[:n_teams]]
+    round_robin_teams = [team for team in teams if team.id in round_robin_team_ids]
+    if len(round_robin_teams) < n_teams:
+        for t in teams:
+            if t.id not in round_robin_team_ids:
+                round_robin_teams.append(t)
+                if len(round_robin_teams) >= n_teams:
+                    break
+    return render_template(
+        "round_robin_admin.html",
+        request=request,
+        games=games,
+        teams=teams,
+        game_id=game_id,
+        n_teams=n_teams,
+        matrix=matrix,
+        round_robin_teams=round_robin_teams,
+    )
 
 
-@app.post("/admin/add_round_player")
-def add_round_player(round_id: int = Form(...), team_id: int = Form(0), participant_id: int = Form(0), db: Session = Depends(get_db)):
-    rp = RoundPlayer(round_id=round_id, team_id=team_id if team_id else None, participant_id=participant_id if participant_id else None)
-    db.add(rp)
+@app.post("/admin/round_robin_save")
+def admin_round_robin_save(game_id: int = Form(...), match_key: str = Form(...), team_a_id: int = Form(0), team_b_id: int = Form(0), score_a: Optional[str] = Form(None), score_b: Optional[str] = Form(None), db: Session = Depends(get_db)):
+    # score_a/score_b may be sent as strings 'null' or empty; normalize to Optional[int]
+    def parse_score(s: Optional[str]) -> Optional[int]:
+        if s is None:
+            return None
+        s2 = str(s).strip()
+        if s2 == '' or s2.lower() == 'null':
+            return None
+        try:
+            return int(s2)
+        except Exception:
+            return None
+
+    score_a_val = parse_score(score_a)
+    score_b_val = parse_score(score_b)
+
+    # normalize team order so match_key is always min_max
+    if team_a_id and team_b_id and team_a_id > team_b_id:
+        team_a_id, team_b_id = team_b_id, team_a_id
+        score_a_val, score_b_val = score_b_val, score_a_val
+        match_key = f"{team_a_id}_{team_b_id}"
+    alt_key = None
+    if team_a_id and team_b_id:
+        alt_key = f"{team_b_id}_{team_a_id}"
+    query = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game_id)
+    if alt_key:
+        query = query.filter(or_(RoundRobinMatch.match_key == match_key, RoundRobinMatch.match_key == alt_key))
+    else:
+        query = query.filter(RoundRobinMatch.match_key == match_key)
+    rec = query.first()
+    if rec:
+        rec.match_key = match_key
+        rec.team_a_id = team_a_id if team_a_id else None
+        rec.team_b_id = team_b_id if team_b_id else None
+        rec.score_a = score_a_val
+        rec.score_b = score_b_val
+    else:
+        rec = RoundRobinMatch(game_id=game_id, match_key=match_key, team_a_id=team_a_id if team_a_id else None, team_b_id=team_b_id if team_b_id else None, score_a=score_a_val, score_b=score_b_val)
+        db.add(rec)
     db.commit()
     return RedirectResponse(url="/admin", status_code=303)
 
@@ -606,22 +781,3 @@ def view_round(request: Request, round_id: int, db: Session = Depends(get_db)):
         matrix[matrix_key] = m
 
     return render_template("round.html", request=request, round=r, players=players, matrix=matrix)
-
-
-# 1. Эндпоинт страницы, где будет открываться видео
-@app.get("/watch")
-async def watch_video_page(request: Request):
-    return render_template("video.html", request=request)
-
-# 2. Эндпоинт, который стримит сам видеофайл
-@app.get("/api/video")
-async def get_video_stream():
-    # Укажи правильный путь к своему видеофайлу в папке static
-    video_path = BASE_DIR / "картинки" / "main" / "mult.mp4"
-    
-    # Небольшая проверка для подстраховки (выведет точный путь в консоль, если файла нет)
-    if not video_path.exists():
-        raise HTTPException(status_code=404, detail=f"Видео не найдено по пути: {video_path}")
-    
-    # FileResponse в FastAPI автоматически поддерживает Range-запросы для перемотки
-    return FileResponse(str(video_path), media_type="video/mp4")
