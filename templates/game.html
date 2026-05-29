@@ -63,6 +63,19 @@
     </div>
 </div>
 
+<div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
+    <h2 style="color: var(--danger); margin-top: 0;">Круговики и турниры</h2>
+    {% if rounds %}
+    <ul>
+        {% for rd in rounds %}
+            <li><a href="/round/{{ rd.id }}">{{ rd.name }}</a></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color:#ddd;">Публичных раундов пока нет. Создайте их в админке.</p>
+    {% endif %}
+</div>
+
 <div class="grid-two">
     <div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
         <h2 style="color: var(--danger); margin-top: 0;">Результаты по этапам</h2>

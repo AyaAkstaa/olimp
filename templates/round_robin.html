@@ -1,0 +1,207 @@
+
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: Arial, Helvetica, sans-serif; padding:16px; color:#222 }}
+    .wrap {{ max-width:1000px; margin:0 auto }}
+    h1 {{ font-size:20px }}
+    table {{ border-collapse:collapse; width:100%; margin-bottom:16px }}
+    th, td {{ border:1px solid #ddd; padding:6px; text-align:center }}
+    th {{ background:#f5f5f5 }}
+    .player-col {{ text-align:left; padding-left:10px }}
+    input.score {{ width:48px }}
+    .standings th {{ background:#eee }}
+    @media (max-width:640px) {{ .wrap {{ padding:8px }} input.score {{ width:40px }} }}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>{title}</h1>
+
+  <h2>Раунд-Матчи</h2>
+  <p>Введите очки каждого матча — таблица автоматически пересчитает очки (3/1/0).</p>
+
+  <table id="matches">
+    <thead>
+      <tr>
+        <th></th>
+        <th class="player-col">Игрок 1</th>
+        <th class="player-col">Игрок 2</th>
+        <th class="player-col">Игрок 3</th>
+        <th class="player-col">Игрок 4</th>
+        <th class="player-col">Игрок 5</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th class="player-col">Игрок 1</th>
+        <td style="background:#f9f9f9">—</td>
+        <td><input class="score" id="m_0_1_a" data-i="0" data-j="1" type="number" min=0 value=""> — <input class="score" id="m_0_1_b" data-i="0" data-j="1" type="number" min=0 value=""></td>
+        <td><input class="score" id="m_0_2_a" data-i="0" data-j="2" type="number" min=0 value=""> — <input class="score" id="m_0_2_b" data-i="0" data-j="2" type="number" min=0 value=""></td>
+        <td><input class="score" id="m_0_3_a" data-i="0" data-j="3" type="number" min=0 value=""> — <input class="score" id="m_0_3_b" data-i="0" data-j="3" type="number" min=0 value=""></td>
+        <td><input class="score" id="m_0_4_a" data-i="0" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_0_4_b" data-i="0" data-j="4" type="number" min=0 value=""></td>
+      </tr>
+      <tr>
+        <th class="player-col">Игрок 2</th>
+        <td class="muted">(см. выше)</td>
+        <td style="background:#f9f9f9">—</td>
+        <td><input class="score" id="m_1_2_a" data-i="1" data-j="2" type="number" min=0 value=""> — <input class="score" id="m_1_2_b" data-i="1" data-j="2" type="number" min=0 value=""></td>
+        <td><input class="score" id="m_1_3_a" data-i="1" data-j="3" type="number" min=0 value=""> — <input class="score" id="m_1_3_b" data-i="1" data-j="3" type="number" min=0 value=""></td>
+        <td><input class="score" id="m_1_4_a" data-i="1" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_1_4_b" data-i="1" data-j="4" type="number" min=0 value=""></td>
+      </tr>
+      <tr>
+        <th class="player-col">Игрок 3</th>
+        <td class="muted">(см. выше)</td>
+        <td class="muted">(см. выше)</td>
+        <td style="background:#f9f9f9">—</td>
+        <td><input class="score" id="m_2_3_a" data-i="2" data-j="3" type="number" min=0 value=""> — <input class="score" id="m_2_3_b" data-i="2" data-j="3" type="number" min=0 value=""></td>
+        <td><input class="score" id="m_2_4_a" data-i="2" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_2_4_b" data-i="2" data-j="4" type="number" min=0 value=""></td>
+      </tr>
+      <tr>
+        <th class="player-col">Игрок 4</th>
+        <td class="muted">(см. выше)</td>
+        <td class="muted">(см. выше)</td>
+        <td class="muted">(см. выше)</td>
+        <td style="background:#f9f9f9">—</td>
+        <td><input class="score" id="m_3_4_a" data-i="3" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_3_4_b" data-i="3" data-j="4" type="number" min=0 value=""></td>
+      </tr>
+      <tr>
+        <th class="player-col">Игрок 5</th>
+        <td class="muted">(см. выше)</td>
+        <td class="muted">(см. выше)</td>
+        <td class="muted">(см. выше)</td>
+        <td class="muted">(см. выше)</td>
+        <td style="background:#f9f9f9">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Турнирная таблица</h2>
+  <table id="standings" class="standings">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Участник</th>
+        <th>И</th>
+        <th>В</th>
+        <th>Н</th>
+        <th>П</th>
+        <th>Очки</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-player="0">
+        <td class="pos">1</td>
+        <td class="player-col">Игрок 1</td>
+        <td class="played">0</td>
+        <td class="wins">0</td>
+        <td class="draws">0</td>
+        <td class="losses">0</td>
+        <td class="points">0</td>
+      </tr>
+      <tr data-player="1">
+        <td class="pos">2</td>
+        <td class="player-col">Игрок 2</td>
+        <td class="played">0</td>
+        <td class="wins">0</td>
+        <td class="draws">0</td>
+        <td class="losses">0</td>
+        <td class="points">0</td>
+      </tr>
+      <tr data-player="2">
+        <td class="pos">3</td>
+        <td class="player-col">Игрок 3</td>
+        <td class="played">0</td>
+        <td class="wins">0</td>
+        <td class="draws">0</td>
+        <td class="losses">0</td>
+        <td class="points">0</td>
+      </tr>
+      <tr data-player="3">
+        <td class="pos">4</td>
+        <td class="player-col">Игрок 4</td>
+        <td class="played">0</td>
+        <td class="wins">0</td>
+        <td class="draws">0</td>
+        <td class="losses">0</td>
+        <td class="points">0</td>
+      </tr>
+      <tr data-player="4">
+        <td class="pos">5</td>
+        <td class="player-col">Игрок 5</td>
+        <td class="played">0</td>
+        <td class="wins">0</td>
+        <td class="draws">0</td>
+        <td class="losses">0</td>
+        <td class="points">0</td>
+      </tr>
+    </tbody>
+  </table>
+
+
+  <script>
+    const players = ["Игрок 1","Игрок 2","Игрок 3","Игрок 4","Игрок 5"];
+    const pts_win = 3;
+    const pts_draw = 1;
+    const pts_loss = 0;
+
+    function recompute() {
+      const n = players.length;
+      const stats = Array.from({length: n}, () => ({played:0, wins:0, draws:0, losses:0, points:0}));
+
+      for (let i=0;i<n;i++){
+        for (let j=i+1;j<n;j++){
+          const a = document.getElementById(`m_${i}_${j}_a`).value;
+          const b = document.getElementById(`m_${i}_${j}_b`).value;
+          if (a === '' || b === '') continue;
+          const sa = parseInt(a,10);
+          const sb = parseInt(b,10);
+          stats[i].played += 1;
+          stats[j].played += 1;
+          if (sa > sb) {
+            stats[i].wins +=1; stats[i].points += pts_win;
+            stats[j].losses +=1; stats[j].points += pts_loss;
+          } else if (sa < sb) {
+            stats[j].wins +=1; stats[j].points += pts_win;
+            stats[i].losses +=1; stats[i].points += pts_loss;
+          } else {
+            stats[i].draws +=1; stats[i].points += pts_draw;
+            stats[j].draws +=1; stats[j].points += pts_draw;
+          }
+        }
+      }
+
+      // write to table
+      const tbody = document.querySelector('#standings tbody');
+      // build array for sorting
+      const arr = stats.map((s, idx) => ({idx: idx, name: players[idx], played: s.played, wins: s.wins, draws: s.draws, losses: s.losses, points: s.points}));
+      arr.sort((a,b) => b.points - a.points || (b.wins - a.wins));
+
+      // update rows
+      arr.forEach((r, pos) => {
+        const row = tbody.querySelector(`tr[data-player="${r.idx}"]`);
+        row.querySelector('.pos').textContent = pos+1;
+        row.querySelector('.played').textContent = r.played;
+        row.querySelector('.wins').textContent = r.wins;
+        row.querySelector('.draws').textContent = r.draws;
+        row.querySelector('.losses').textContent = r.losses;
+        row.querySelector('.points').textContent = r.points;
+      });
+    }
+
+    // attach listeners
+    document.querySelectorAll('input.score').forEach(inp => {
+      inp.addEventListener('input', recompute);
+    });
+
+    // initial compute
+    recompute();
+  </script>
+
+</div>
+</body>
+</html>

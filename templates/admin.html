@@ -195,6 +195,58 @@
                     {% endfor %}
                 </tbody>
             </table>
+            <h3 style="margin-top:12px;">Управление раундами</h3>
+            <form action="/admin/add_round_player" method="POST" class="admin-form">
+                <label>Раунд</label>
+                <select name="round_id" required>
+                    {% for rd in rounds %}
+                        <option value="{{ rd.id }}">{{ rd.name }} ({{ rd.game.name }})</option>
+                    {% endfor %}
+                </select>
+                <label>Команда</label>
+                <select name="team_id">
+                    <option value="0">— без команды —</option>
+                    {% for team in teams %}
+                        <option value="{{ team.id }}">{{ team.name }}</option>
+                    {% endfor %}
+                </select>
+                <label>Участник</label>
+                <select name="participant_id">
+                    <option value="0">— без участника —</option>
+                    {% for participant in participants %}
+                        <option value="{{ participant.id }}">{{ participant.name }}{% if participant.team %} ({{ participant.team.name }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Добавить игрок в раунд</button>
+            </form>
+
+            <form action="/admin/add_round_match" method="POST" class="admin-form">
+                <label>Раунд</label>
+                <select name="round_id" required>
+                    {% for rd in rounds %}
+                        <option value="{{ rd.id }}">{{ rd.name }} ({{ rd.game.name }})</option>
+                    {% endfor %}
+                </select>
+                <label>Игрок A</label>
+                <select name="player_a_id" required>
+                    {% for rp in round_players_all %}
+                        <option value="{{ rp.id }}">{% if rp.participant %}{{ rp.participant.name }}{% elif rp.team %}{{ rp.team.name }}{% else %}#{{ rp.id }}{% endif %} (раунд {{ rp.round_id }})</option>
+                    {% endfor %}
+                </select>
+                <label>Игрок B</label>
+                <select name="player_b_id" required>
+                    {% for rp in round_players_all %}
+                        <option value="{{ rp.id }}">{% if rp.participant %}{{ rp.participant.name }}{% elif rp.team %}{{ rp.team.name }}{% else %}#{{ rp.id }}{% endif %} (раунд {{ rp.round_id }})</option>
+                    {% endfor %}
+                </select>
+                <label>Очки A</label>
+                <input type="number" name="score_a" value="0">
+                <label>Очки B</label>
+                <input type="number" name="score_b" value="0">
+                <label>Примечание</label>
+                <input type="text" name="notes" placeholder="(необязательно)">
+                <button type="submit">Добавить матч</button>
+            </form>
 
             <h2 style="margin-top:18px;">Участники</h2>
             <table class="data-table">
@@ -262,6 +314,39 @@
                 <textarea name="notes" rows="3" placeholder="Например, итоговая таблица или порядок игр"></textarea>
                 <button type="submit">Добавить результат</button>
             </form>
+            
+            <h2 style="margin-top:18px;">Круговые турниры</h2>
+            <form action="/admin/add_round" method="POST" class="admin-form">
+                <label>Игра</label>
+                <select name="game_id" required>
+                    {% for game in games %}
+                        <option value="{{ game.id }}">{{ game.name }}</option>
+                    {% endfor %}
+                </select>
+                <label>Название раунда</label>
+                <input type="text" name="name" required placeholder="Например, Круговик">
+                <button type="submit">Создать раунд</button>
+            </form>
+
+            <h3>Существующие раунды</h3>
+            <table class="data-table">
+                <thead><tr><th>Раунд</th><th>Игроки</th><th>Действия</th></tr></thead>
+                <tbody>
+                    {% for rd in rounds %}
+                    <tr>
+                        <td>{{ rd.name }} ({{ rd.game.name }})</td>
+                        <td>
+                            {{ rd.round_players | map(attribute='participant.name') | join(', ') }}
+                        </td>
+                        <td class="action-row">
+                            <form action="/admin" method="GET">
+                                <a href="/round/{{ rd.id }}" class="link-pill">Открыть</a>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             <!-- datalists populated from existing DB values -->
             <datalist id="stages_list">
                 {% for s in stages %}
