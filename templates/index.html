@@ -180,6 +180,52 @@
         display: none;
     }
 
+    /* --- Стили для диалога Монокумы --- */
+    .monokuma-dialogue {
+        position: absolute;
+        /* Позицию облака нужно будет подогнать под твою картинку */
+        top: 14%; 
+        left: 60%; 
+        width: 350px;
+        height: 250px;
+        background-image: url('/static/main/МакетГлавной_0008_Диалог.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        
+        /* Центрируем текст внутри облака */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        /* padding подбирается так, чтобы текст не залезал на "хвостик" облака */
+        padding: 20px 30px 60px 30px; 
+        box-sizing: border-box;
+        
+        /* Анимация появления */
+        opacity: 0;
+        transform: scale(0.5) translateY(40px);
+        transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        pointer-events: none; /* Чтобы облако не мешало кликать */
+        z-index: 10;
+    }
+
+    .monokuma-dialogue.show {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+
+    #monokuma-text {
+        font-family: 'Arial', sans-serif; /* Замени на свой игровой шрифт, если есть */
+        font-size: 18px;
+        font-weight: 800;
+        color: #E6007A;
+        text-align: center;
+        margin-top: 57px;
+        align-items: center;
+        line-height: 1.3;
+    }
+
     @media (max-width: 1200px) {
         .hero-container {
             grid-template-columns: 1fr;
@@ -236,9 +282,15 @@
             </div>
         </div>
         <div class="hero-right">
-            <a href="/register" class="monokuma-giant" title="Нажми на Монокуму для регистрации">
-                <img src="/static/main/МакетГлавной_0009_Монокума.png" alt="Монокума" style="width: 100%; height: auto; display: block;">
-            </a>
+            <div class="monokuma-giant" id="monokuma-interact" title="Ну жми, чё">
+                
+                <div class="monokuma-dialogue" id="monokuma-dialogue">
+                    <p id="monokuma-text"></p>
+                </div>
+
+                <img src="/static/main/МакетГлавной_0009_Монокума.png" id="monokuma-sprite" alt="Монокума" style="width: 100%; height: auto; display: block; transition: opacity 0.2s ease;">
+            </div>
+            
             <div class="diagonal-section"></div>
         </div>
     </div>
@@ -314,5 +366,69 @@
             }
         });
     });
+
+    // --- Логика диалогов Монокумы ---
+    const monokumaInteract = document.getElementById('monokuma-interact');
+    const monokumaSprite = document.getElementById('monokuma-sprite');
+    const monokumaDialogue = document.getElementById('monokuma-dialogue');
+    const monokumaText = document.getElementById('monokuma-text');
+
+    // Сохраняем путь к дефолтному спрайту
+    const defaultSprite = '/static/main/МакетГлавной_0009_Монокума.png';
+
+    // База фраз. Добавляй свои тексты и указывай нужный спрайт
+    const monokumaMessages = [
+        { 
+            text: "Пу-ху-ху! Добро пожаловать!", 
+            sprite: defaultSprite 
+        },
+        { 
+            text: "Редиректа не будет, только отчаяние!", 
+            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+        },
+        { 
+            text: "Ну и чё...", 
+            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+        },
+        { 
+            text: "Время наказания приближается!", 
+            sprite: defaultSprite 
+        }
+    ];
+
+    let dialogueTimeout;
+
+    if (monokumaInteract) {
+        monokumaInteract.addEventListener('click', () => {
+            // 1. Выбираем случайную фразу
+            const randomMsg = monokumaMessages[Math.floor(Math.random() * monokumaMessages.length)];
+            
+            // 2. Устанавливаем текст
+            monokumaText.textContent = randomMsg.text;
+            
+            // 3. Меняем спрайт (с легким миганием для плавности, если нужно)
+            monokumaSprite.style.opacity = '0.8';
+            setTimeout(() => {
+                monokumaSprite.src = randomMsg.sprite;
+                monokumaSprite.style.opacity = '1';
+            }, 50);
+            
+            // 4. Показываем облако
+            monokumaDialogue.classList.add('show');
+            
+            // 5. Очищаем таймер, если игрок кликает быстро-быстро
+            clearTimeout(dialogueTimeout);
+            
+            // 6. Прячем диалог через 4 секунды
+            dialogueTimeout = setTimeout(() => {
+                monokumaDialogue.classList.remove('show');
+                
+                // Возвращаем дефолтный спрайт после исчезновения текста
+                setTimeout(() => { 
+                    monokumaSprite.src = defaultSprite; 
+                }, 300);
+            }, 4000);
+        });
+    }
 </script>
 {% endblock %}
