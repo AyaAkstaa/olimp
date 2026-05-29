@@ -279,7 +279,7 @@ def schedule_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return render_template("register.html", request=request, message=None)
+    return RedirectResponse(url="https://forms.yandex.ru/u/6a0cbcd884227c3869ab7608", status_code=303)
 
 
 @app.post("/register")
