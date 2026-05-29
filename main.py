@@ -105,6 +105,42 @@ class ScheduleItem(Base):
     game = relationship("Game")
 
 
+class Round(Base):
+    __tablename__ = "rounds"
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id"))
+    name = Column(String)
+    game = relationship("Game")
+
+
+class RoundPlayer(Base):
+    __tablename__ = "round_players"
+    id = Column(Integer, primary_key=True, index=True)
+    round_id = Column(Integer, ForeignKey("rounds.id"))
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=True)
+    round = relationship("Round")
+    team = relationship("Team")
+    participant = relationship("Participant")
+
+
+class RoundMatch(Base):
+    __tablename__ = "round_matches"
+    id = Column(Integer, primary_key=True, index=True)
+    round_id = Column(Integer, ForeignKey("rounds.id"))
+    player_a_id = Column(Integer, ForeignKey("round_players.id"))
+    player_b_id = Column(Integer, ForeignKey("round_players.id"))
+    score_a = Column(Integer, default=0)
+    score_b = Column(Integer, default=0)
+    notes = Column(String, default="")
+    round = relationship("Round")
+    player_a = relationship("RoundPlayer", foreign_keys=[player_a_id])
+    player_b = relationship("RoundPlayer", foreign_keys=[player_b_id])
+
+# ensure new tables exist
+Base.metadata.create_all(bind=engine)
+
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -282,12 +318,14 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
         return RedirectResponse(url="/")
     scores = db.query(Score).filter(Score.game_id == game.id).order_by(Score.stage, Score.match_title, desc(Score.score)).all()
     schedule_items = db.query(ScheduleItem).filter(ScheduleItem.game_id == game.id).order_by(ScheduleItem.time, ScheduleItem.id).all()
+    rounds = db.query(Round).filter(Round.game_id == game.id).order_by(Round.name).all()
     return render_template(
         "game.html",
         request=request,
         game=game,
         scores=scores,
         schedule_items=schedule_items,
+        rounds=rounds,
     )
 
 
@@ -310,6 +348,12 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     stages = [s[0] for s in stages_q]
     match_titles = [m[0] for m in match_titles_q]
     user = cookie_user
+    rounds = db.query(Round).order_by(Round.game_id, Round.name).all()
+    # eager load players
+    for rd in rounds:
+        rd.round_players = db.query(RoundPlayer).filter(RoundPlayer.round_id == rd.id).all()
+    round_players_all = db.query(RoundPlayer).all()
+
     return render_template(
         "admin.html",
         request=request,
@@ -321,6 +365,8 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         stages=stages,
         match_titles=match_titles,
         user=user,
+        rounds=rounds,
+        round_players_all=round_players_all,
     )
 
 
@@ -512,3 +558,49 @@ def update_participant(participant_id: int = Form(...), name: str = Form(...), t
         p.team_id = team_id if team_id else None
         db.commit()
     return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/add_round")
+def add_round(game_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+    if name.strip():
+        r = Round(game_id=game_id, name=name.strip())
+        db.add(r)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/add_round_player")
+def add_round_player(round_id: int = Form(...), team_id: int = Form(0), participant_id: int = Form(0), db: Session = Depends(get_db)):
+    rp = RoundPlayer(round_id=round_id, team_id=team_id if team_id else None, participant_id=participant_id if participant_id else None)
+    db.add(rp)
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/add_round_match")
+def add_round_match(round_id: int = Form(...), player_a_id: int = Form(...), player_b_id: int = Form(...), score_a: int = Form(0), score_b: int = Form(0), notes: str = Form(""), db: Session = Depends(get_db)):
+    # create match record
+    rm = RoundMatch(round_id=round_id, player_a_id=player_a_id, player_b_id=player_b_id, score_a=score_a, score_b=score_b, notes=notes.strip())
+    db.add(rm)
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.get("/round/{round_id}", response_class=HTMLResponse)
+def view_round(request: Request, round_id: int, db: Session = Depends(get_db)):
+    r = db.query(Round).filter(Round.id == round_id).first()
+    if not r:
+        return RedirectResponse(url="/admin", status_code=303)
+    # get players
+    players = db.query(RoundPlayer).filter(RoundPlayer.round_id == round_id).all()
+    matches = db.query(RoundMatch).filter(RoundMatch.round_id == round_id).all()
+
+    # build matrix dictionary for quick lookup
+    matrix = {}
+    for m in matches:
+        a = m.player_a_id
+        b = m.player_b_id
+        matrix_key = f"{min(a,b)}_{max(a,b)}"
+        matrix[matrix_key] = m
+
+    return render_template("round.html", request=request, round=r, players=players, matrix=matrix)
