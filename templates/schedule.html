@@ -22,11 +22,15 @@
         border-collapse: collapse;
         margin-top: 18px;
         color: #fff;
+        table-layout: fixed;
+        max-width: 100%;
     }
     .summary-table th,
     .summary-table td {
         padding: 14px 16px;
         border: 1px solid rgba(255,255,255,0.08);
+        word-break: break-word;
+        overflow-wrap: anywhere;
     }
     .summary-table th {
         background: rgba(230,0,122,0.95);
@@ -52,6 +56,7 @@
         margin-bottom: 6px;
         color: #ddd;
     }
+    .item-row span { display: block; }
     .note-box {
         background: rgba(230,0,122,0.08);
         padding: 16px;

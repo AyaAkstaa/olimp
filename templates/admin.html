@@ -38,6 +38,52 @@
         color: #fff;
         outline: none;
     }
+    /* Table / inline edit styling */
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 18px;
+        color: #fff;
+        table-layout: fixed;
+    }
+    .data-table td, .data-table th {
+        /* avoid breaking words into single letters */
+        word-break: normal;
+        overflow-wrap: anywhere;
+        vertical-align: top;
+    }
+    .data-table input, .data-table select, .data-table textarea {
+        background: #fff;
+        color: #000;
+        border: 1px solid rgba(0,0,0,0.12);
+        padding: 8px;
+        border-radius: 6px;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    .data-table button {
+        white-space: nowrap;
+        min-width: 92px;
+        display: inline-block;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: var(--danger);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        text-transform: none;
+    }
+    /* prevent first/third columns from becoming too narrow */
+    .data-table td:nth-child(1), .data-table th:nth-child(1) { min-width: 220px; }
+    .data-table td:nth-child(3), .data-table th:nth-child(3) { min-width: 120px; }
+    /* Scores table tweaks: keep notes from overflowing into actions */
+    .scores-table { table-layout: auto; }
+    .scores-table td:nth-child(7) input { max-width: 260px; }
+    .scores-table td:nth-child(7) { min-width: 220px; }
+    .scores-table td:nth-child(8), .scores-table th:nth-child(8) { width: 160px; }
+    .scores-table .action-row { justify-content: flex-end; }
+    .data-table .action-row { white-space: nowrap; }
+    .data-table { max-width: 100%; }
     .admin-form button {
         background: var(--danger);
         color: var(--black);
@@ -62,6 +108,7 @@
     .data-table th {
         background: rgba(230,0,122,0.95);
     }
+    .data-table th { color: #fff; }
     .data-table tr:nth-child(odd) {
         background: rgba(255,255,255,0.02);
     }
@@ -126,12 +173,56 @@
 
             <h2>Текущие команды</h2>
             <table class="data-table">
-                <thead><tr><th>Команда</th><th>Участники</th></tr></thead>
+                <thead><tr><th>Команда</th><th>Участники</th><th>Действия</th></tr></thead>
                 <tbody>
                     {% for team in teams %}
                     <tr>
-                        <td>{{ team.name }}</td>
+                        <td>
+                            <input form="upd_team_{{ team.id }}" type="hidden" name="team_id" value="{{ team.id }}">
+                            <input form="upd_team_{{ team.id }}" type="text" name="name" value="{{ team.name }}" style="min-width:180px;">
+                        </td>
                         <td>{{ team.participants | map(attribute='name') | join(', ') or '—' }}</td>
+                        <td class="action-row">
+                            <form id="upd_team_{{ team.id }}" action="/admin/update_team" method="POST" style="display:inline-flex; gap:8px; align-items:center;">
+                                <button type="submit">Сохранить</button>
+                            </form>
+                            <form action="/admin/delete_team" method="POST" style="display:inline;">
+                                <input type="hidden" name="team_id" value="{{ team.id }}">
+                                <button type="submit" style="background:#333;">Удалить</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h2 style="margin-top:18px;">Участники</h2>
+            <table class="data-table">
+                <thead><tr><th>Имя</th><th>Команда</th><th>Действия</th></tr></thead>
+                <tbody>
+                    {% for participant in participants %}
+                    <tr>
+                        <td>
+                            <input form="upd_part_{{ participant.id }}" type="text" name="name" value="{{ participant.name }}" style="min-width:160px;">
+                        </td>
+                        <td>
+                                <select form="upd_part_{{ participant.id }}" name="team_id">
+                                    <option value="0">— без команды —</option>
+                                    {% for team in teams %}
+                                        <option value="{{ team.id }}" {% if participant.team and participant.team.id == team.id %}selected{% endif %}>{{ team.name }}</option>
+                                    {% endfor %}
+                                </select>
+                        </td>
+                        <td class="action-row">
+                            <form id="upd_part_{{ participant.id }}" action="/admin/update_participant" method="POST" style="display:inline-flex; gap:8px; align-items:center;">
+                                <input type="hidden" name="participant_id" value="{{ participant.id }}">
+                                <button type="submit">Сохранить</button>
+                            </form>
+                            <form action="/admin/delete_participant" method="POST" style="display:inline;">
+                                <input type="hidden" name="participant_id" value="{{ participant.id }}">
+                                <button type="submit" style="background:#333;">Удалить</button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -148,9 +239,9 @@
                     {% endfor %}
                 </select>
                 <label>Этап / таблица</label>
-                <input type="text" name="stage" placeholder="Например, Круговик, Бедварс, Сетка">
+                <input type="text" name="stage" list="stages_list" placeholder="Например, Круговик, Бедварс, Сетка">
                 <label>Матч / секция</label>
-                <input type="text" name="match_title" placeholder="Например, Круг 1, Бинго, Поле A">
+                <input type="text" name="match_title" list="matches_list" placeholder="Например, Круг 1, Бинго, Поле A">
                 <label>Команда</label>
                 <select name="team_id">
                     <option value="0">— без команды —</option>
@@ -171,6 +262,17 @@
                 <textarea name="notes" rows="3" placeholder="Например, итоговая таблица или порядок игр"></textarea>
                 <button type="submit">Добавить результат</button>
             </form>
+            <!-- datalists populated from existing DB values -->
+            <datalist id="stages_list">
+                {% for s in stages %}
+                    <option value="{{ s }}"></option>
+                {% endfor %}
+            </datalist>
+            <datalist id="matches_list">
+                {% for m in match_titles %}
+                    <option value="{{ m }}"></option>
+                {% endfor %}
+            </datalist>
 
             <h2>График матча</h2>
             <form action="/admin/add_schedule" method="POST" class="admin-form">
@@ -195,7 +297,7 @@
 
     <div class="admin-block">
         <h2>Текущие результаты</h2>
-        <table class="data-table">
+        <table class="data-table scores-table">
             <thead>
                 <tr>
                     <th>Игра</th>
@@ -217,14 +319,14 @@
                     <td>{{ score.team.name if score.team else '—' }}</td>
                     <td>{{ score.participant.name if score.participant else '—' }}</td>
                     <td>
-                        <form action="/admin/update_score" method="POST" style="display:inline-flex; gap:8px; align-items:center;">
-                            <input type="hidden" name="score_id" value="{{ score.id }}">
-                            <input type="number" name="score" value="{{ score.score }}" style="width:80px;">
+                        <input form="upd_score_{{ score.id }}" type="hidden" name="score_id" value="{{ score.id }}">
+                        <input form="upd_score_{{ score.id }}" type="number" name="score" value="{{ score.score }}" style="width:80px;">
                     </td>
                     <td>
-                            <input type="text" name="notes" value="{{ score.notes or '' }}" style="width:180px;">
+                        <input form="upd_score_{{ score.id }}" type="text" name="notes" value="{{ score.notes or '' }}" style="width:180px;">
                     </td>
                     <td class="action-row">
+                        <form id="upd_score_{{ score.id }}" action="/admin/update_score" method="POST" style="display:inline-flex; gap:8px; align-items:center;">
                             <button type="submit">Сохранить</button>
                         </form>
                         <form action="/admin/delete_score" method="POST" style="display:inline;">
@@ -248,18 +350,36 @@
                     <th>Матч</th>
                     <th>Локация</th>
                     <th>Описание</th>
-                    <th>Удалить</th>
+                    <th>Действия</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in schedule_items %}
                 <tr>
-                    <td>{{ item.game.name }}</td>
-                    <td>{{ item.time }}</td>
-                    <td>{{ item.title }}</td>
-                    <td>{{ item.location or '—' }}</td>
-                    <td>{{ item.description or '—' }}</td>
                     <td>
+                        <select form="upd_sched_{{ item.id }}" name="game_id">
+                            {% for game in games %}
+                                <option value="{{ game.id }}" {% if game.id == item.game_id %}selected{% endif %}>{{ game.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <input form="upd_sched_{{ item.id }}" type="text" name="time" value="{{ item.time }}" style="min-width:100px;">
+                    </td>
+                    <td>
+                        <input form="upd_sched_{{ item.id }}" type="text" name="title" value="{{ item.title }}" style="min-width:160px;">
+                    </td>
+                    <td>
+                        <input form="upd_sched_{{ item.id }}" type="text" name="location" value="{{ item.location or '' }}">
+                    </td>
+                    <td>
+                        <input form="upd_sched_{{ item.id }}" type="text" name="description" value="{{ item.description or '' }}">
+                    </td>
+                    <td class="action-row">
+                        <form id="upd_sched_{{ item.id }}" action="/admin/update_schedule" method="POST" style="display:inline-flex; gap:8px; align-items:center;">
+                            <input type="hidden" name="schedule_id" value="{{ item.id }}">
+                            <button type="submit">Сохранить</button>
+                        </form>
                         <form action="/admin/delete_schedule" method="POST" style="display:inline;">
                             <input type="hidden" name="schedule_id" value="{{ item.id }}">
                             <button type="submit" style="background:#333;">Удалить</button>
