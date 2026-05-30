@@ -21,7 +21,7 @@
         left: 0;
         width: 100%;
         /* Даем запас по высоте (20% от экрана), чтобы при прокрутке снизу не оголялся черный фон */
-        height: 120vh; 
+        height: 130vh; 
         background-image: url('/static/main/МакетГлавной_0013_Кровь.png');
         background-size: cover;
         background-position: center top;
@@ -338,7 +338,7 @@
             scrollRaf = requestAnimationFrame(() => {
                 // -0.15 — это скорость движения фона. 
                 // Он будет двигаться примерно в 7 раз медленнее основного контента.
-                const speed = -0.25; 
+                const speed = -0.15; 
                 const offset = window.scrollY * speed;
                 
                 // Передаем значение в CSS
