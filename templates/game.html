@@ -209,6 +209,7 @@
 </div>
 {% endif %}
 
+{% if game.slug == 'geoguessr' %}
 <div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
     <h2 style="color: var(--danger); margin-top: 0;">{% if game.slug == 'geoguessr' %}Все против всех{% else %}Результаты по этапам{% endif %}</h2>
     
@@ -245,10 +246,7 @@
                     {% if game.slug == 'geoguessr' %}
                         <td>{{ result.team.name if result.team else '—' }}</td>
                         <td>{{ result.participant.name if result.participant else '—' }}</td>
-                        <td class="score-cell" data-original="{{ result.score }}">
-                            <span class="score-display">{{ result.score }}</span>
-                            <input type="number" class="score-input" value="{{ result.score }}" style="display:none; width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;">
-                        </td>
+                        <td class="score-cell" data-original="{{ result.score }}">{{ result.score }}</td>
                         {% if is_admin %}
                         <td><button type="button" class="delete-row-btn" data-score-id="{{ result.id }}" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>
                         {% endif %}
@@ -274,6 +272,7 @@
         </tbody>
     </table>
 </div>
+{% endif %}
 
     {% if game.slug == 'geoguessr' %}
     <div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
@@ -327,7 +326,849 @@
     </div>
     {% endif %}
 
+    
+{% if game.slug == 'minecraft' %}
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+    <h2 style="color: var(--danger); margin-top: 0;">Бинго</h2>
+    {% set bingo = namespace(data={}) %}
+    {% for result in scores %}
+        {% if result.team and result.stage and (result.stage|lower) == 'bingo' %}
+            {% set team_name = result.team.name %}
+            {% set current = bingo.data.get(team_name, 0) %}
+            {% set _ = bingo.data.update({team_name: current + (result.score or 0)}) %}
+        {% endif %}
+    {% endfor %}
+    <table class="leaderboard" id="bingo-totals-table">
+        <thead>
+            <tr><th>Команда</th><th>Очки</th></tr>
+        </thead>
+        <tbody>
+            {% if bingo.data %}
+                {% for team_name, points in bingo.data.items() %}
+                <tr data-team-name="{{ team_name }}"><td>{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет результатов для Бинго.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+    <h2 style="color: var(--danger); margin-top: 0;">Бедварс</h2>
+    {% set bed = namespace(data={}) %}
+    {% for result in scores %}
+        {% if result.team and result.stage and (result.stage|lower) == 'bedwars' %}
+            {% set team_name = result.team.name %}
+            {% set current = bed.data.get(team_name, 0) %}
+            {% set _ = bed.data.update({team_name: current + (result.score or 0)}) %}
+        {% endif %}
+    {% endfor %}
+    <table class="leaderboard" id="bedwars-totals-table">
+        <thead>
+            <tr><th>Команда</th><th>Очки</th></tr>
+        </thead>
+        <tbody>
+            {% if bed.data %}
+                {% for team_name, points in bed.data.items() %}
+                <tr data-team-name="{{ team_name }}"><td>{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет результатов для Бедварс.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+    <h2 style="color: var(--danger); margin-top: 0;">Сводная таблица</h2>
+    {% set summary = namespace(data={}) %}
+    {% for team_name, pts in bingo.data.items() %}
+        {% set current = summary.data.get(team_name, 0) %}
+        {% set _ = summary.data.update({team_name: current + pts}) %}
+    {% endfor %}
+    {% for team_name, pts in bed.data.items() %}
+        {% set current = summary.data.get(team_name, 0) %}
+        {% set _ = summary.data.update({team_name: current + pts}) %}
+    {% endfor %}
+    <table class="leaderboard" id="minecraft-summary-table">
+        <thead>
+            <tr><th>Команда</th><th>Очки</th></tr>
+        </thead>
+        <tbody>
+            {% if summary.data %}
+                {% for team_name, points in summary.data.items() %}
+                <tr data-team-name="{{ team_name }}"><td>{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет командных результатов для отображения.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
 <a href="/" class="back-link">❮ Назад к списку игр</a>
+
+
+<script>
+    (function() {
+        function sortTableBySecondCol(id) {
+            var table = document.getElementById(id);
+            if (!table) return;
+            var tbody = table.querySelector('tbody'); if (!tbody) return;
+            var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row){ return row.querySelector('td'); });
+            rows.sort(function(a,b){
+                var pa = parseFloat(String(a.querySelector('td:nth-child(2)').textContent||'').replace(',','.'))||-Infinity;
+                var pb = parseFloat(String(b.querySelector('td:nth-child(2)').textContent||'').replace(',','.'))||-Infinity;
+                return pb - pa;
+            }); rows.forEach(function(r){ tbody.appendChild(r); });
+        }
+        sortTableBySecondCol('bingo-totals-table');
+        sortTableBySecondCol('bedwars-totals-table');
+        sortTableBySecondCol('minecraft-summary-table');
+    })();
+</script>
+
+{% endif %}
+
+    {% if is_admin and game.slug == 'minecraft' %}
+    <script>
+        (function(){
+            var GAME_ID = {{ game.id }};
+            var ALL_TEAMS = [
+                {% for t in teams %}
+                { id: {{ t.id }}, name: {{ t.name | tojson }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ];
+
+            function makeTeamOptions(selectedId){
+                var html = '<option value="0">— без команды —</option>';
+                ALL_TEAMS.forEach(function(team){ html += '<option value="'+team.id+'"'+(team.id===selectedId?' selected':'')+'>'+team.name+'</option>'; });
+                html += '<option value="__new">— создать новую —</option>';
+                return html;
+            }
+
+            function createInlineTeamRow(stage, teamId, teamName, scoreVal){
+                var tr = document.createElement('tr');
+                tr.className = 'new-inline-row';
+                tr.innerHTML = `
+                    <td>
+                        <select class="inline-team-select">${makeTeamOptions(teamId||0)}</select>
+                        <input type="text" class="inline-team-new" placeholder="Новое название команды" style="display:none; margin-top:6px; width:95%;">
+                    </td>
+                    <td>
+                        <input type="number" class="inline-score" value="${scoreVal!=null?scoreVal:0}" style="width:80px;">
+                    </td>
+                    <td>
+                        <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                            <button class="inline-save" type="button">Сохранить</button>
+                            <button class="inline-cancel" type="button">Отмена</button>
+                            <button class="inline-delete" type="button" style="background:#c62828;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;">Удалить</button>
+                        </div>
+                    </td>
+                `;
+                var sel = tr.querySelector('.inline-team-select');
+                var newInput = tr.querySelector('.inline-team-new');
+                sel.addEventListener('change', function(){ newInput.style.display = sel.value === '__new' ? 'block' : 'none'; });
+                tr.querySelector('.inline-cancel').addEventListener('click', function(){ tr.remove(); });
+                tr.querySelector('.inline-delete').addEventListener('click', function(){ tr.remove(); });
+                tr.querySelector('.inline-save').addEventListener('click', function(){
+                    var team_val = sel.value;
+                    var score = tr.querySelector('.inline-score').value;
+                    var payload = { game_id: GAME_ID, stage: stage, score: score };
+                    if (team_val === '__new'){
+                        var tn = newInput.value.trim(); if (!tn){ alert('Введите название команды'); return; }
+                        payload.team_name = tn;
+                    } else if (team_val && team_val !== '0'){
+                        payload.team_id = team_val;
+                    }
+                    fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                        .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); })
+                        .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка: ' + (j && j.error ? j.error : 'unknown')); })
+                        .catch(function(e){ console.error(e); alert('Ошибка при добавлении строки'); });
+                });
+                return tr;
+            }
+
+            function attachAdminControlsFor(stage, tableId){
+                var table = document.getElementById(tableId);
+                if (!table) return;
+                var wrapper = document.createElement('div');
+                wrapper.style.marginBottom = '12px';
+                wrapper.innerHTML = `
+                    <button class="edit-btn" type="button" style="background:#e60078; padding:8px 16px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать</button>
+                    <button class="save-btn" type="button" style="display:none; background:#28a745; padding:8px 16px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Сохранить</button>
+                    <button class="cancel-btn" type="button" style="display:none; background:#333; padding:8px 16px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Отменить</button>
+                    <button class="add-row-btn" type="button" style="background:#ffd9b3; padding:8px 12px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:12px;">+ Строка</button>
+                    <button class="download-all-btn" type="button" style="background:#e6e6e6; padding:8px 12px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:6px;">Загрузить все команды</button>
+                `;
+                table.parentNode.insertBefore(wrapper, table);
+
+                var editBtn = wrapper.querySelector('.edit-btn');
+                var saveBtn = wrapper.querySelector('.save-btn');
+                var cancelBtn = wrapper.querySelector('.cancel-btn');
+                var addRowBtn = wrapper.querySelector('.add-row-btn');
+                var downloadBtn = wrapper.querySelector('.download-all-btn');
+
+                var editMode = false;
+                var changes = { add: [], update: [], delete: [] };
+
+                function enable(){
+                    editMode = true; editBtn.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block';
+                    // make existing rows editable
+                    Array.from(table.querySelectorAll('tbody tr')).forEach(function(row){
+                        if (!row.querySelector('td')) return;
+                        var cell = row.querySelector('td:nth-child(2)');
+                        var txt = cell ? cell.textContent.trim() : '';
+                        var input = document.createElement('input'); input.type='number'; input.value = txt==='—'?'':txt; input.style.width='80px';
+                        if (cell) { cell.innerHTML=''; cell.appendChild(input); }
+                        // add delete button
+                        if (!row.querySelector('.row-delete')){
+                            var d = document.createElement('button'); d.className='row-delete'; d.type='button'; d.textContent='Удалить'; d.style.background='#c62828'; d.style.color='#fff'; d.style.border='none'; d.style.padding='6px 8px'; d.style.borderRadius='4px'; d.style.marginLeft='8px';
+                            if (row.querySelector('td:last-child')) row.querySelector('td:last-child').appendChild(d);
+                            else { var td = document.createElement('td'); td.appendChild(d); row.appendChild(td); }
+                            d.addEventListener('click', function(){ row.remove(); changes.delete.push({ team_name: row.dataset.teamName || row.getAttribute('data-team-name') }); });
+                        }
+                    });
+                }
+
+                function disable(){
+                    editMode = false; editBtn.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none';
+                    // restore display values
+                    Array.from(table.querySelectorAll('tbody tr')).forEach(function(row){
+                        if (!row.querySelector('td')) return;
+                        var cell = row.querySelector('td:nth-child(2)');
+                        var input = cell ? cell.querySelector('input') : null;
+                        var val = input ? input.value : (cell ? cell.textContent : '');
+                        if (cell) cell.textContent = (val===''? '—' : val);
+                        var del = row.querySelector('.row-delete'); if (del) del.remove();
+                    });
+                    changes = { add: [], update: [], delete: [] };
+                }
+
+                addRowBtn.addEventListener('click', function(){
+                    var tbody = table.querySelector('tbody'); if (!tbody) return;
+                    var tr = createInlineTeamRow(stage, 0, '', 0);
+                    // put third cell for action buttons
+                    var tdAction = document.createElement('td'); tr.appendChild(tdAction);
+                    tbody.insertBefore(tr, tbody.firstChild);
+                });
+
+                downloadBtn.addEventListener('click', function(){
+                    // prepare payload to add all teams that are not present
+                    var present = new Set(); table.querySelectorAll('tbody tr').forEach(function(r){ var tn = r.getAttribute('data-team-name') || (r.querySelector('td') && r.querySelector('td').textContent.trim()); present.add(tn); });
+                    var ops = [];
+                    ALL_TEAMS.forEach(function(t){ if (!present.has(t.name)) ops.push({ op: 'add', team_id: t.id, team_name: t.name, score: 0, stage: stage }); });
+                    if (!ops.length){ alert('Нечего загружать'); return; }
+                    fetch('/admin/scores_batch_minecraft', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ game_id: GAME_ID, ops: ops }) })
+                        .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); })
+                        .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка: '+(j && j.error?j.error:'unknown')); })
+                        .catch(function(e){ console.error(e); alert('Ошибка при загрузке всех команд: ' + (e && (e.detail || e.error) ? (e.detail || e.error) : (e && e.message ? e.message : 'unknown'))); });
+                });
+
+                cancelBtn.addEventListener('click', function(){ disable(); });
+
+                saveBtn.addEventListener('click', function(){
+                    // collect updates and adds
+                    var ops = [];
+                    table.querySelectorAll('tbody tr').forEach(function(r){
+                        var teamName = r.getAttribute('data-team-name') || (r.querySelector('td') && r.querySelector('td').textContent.trim());
+                        var valCell = r.querySelector('td:nth-child(2)');
+                        var input = valCell ? valCell.querySelector('input') : null;
+                        var score = input ? input.value : (valCell ? valCell.textContent.trim() : '0');
+                        if (r.classList.contains('new-inline-row')){
+                            var sel = r.querySelector('.inline-team-select');
+                            var team_val = sel ? sel.value : '0';
+                            if (team_val === '__new'){
+                                var tn = r.querySelector('.inline-team-new').value.trim(); if (!tn) return; ops.push({ op:'add', team_name: tn, score: score, stage: stage });
+                            } else if (team_val && team_val !== '0'){
+                                ops.push({ op:'add', team_id: team_val, score: score, stage: stage });
+                            } else { ops.push({ op:'add', team_name: teamName, score: score, stage: stage }); }
+                        } else {
+                            // update existing
+                            ops.push({ op:'update', team_name: teamName, score: score, stage: stage });
+                        }
+                    });
+                    // include deletes
+                    changes.delete.forEach(function(d){ ops.push({ op:'delete', team_name: d.team_name, stage: stage }); });
+                    if (!ops.length){ alert('Нет изменений для сохранения'); return; }
+                    fetch('/admin/scores_batch_minecraft', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ game_id: GAME_ID, ops: ops }) })
+                        .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); })
+                        .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка при сохранении: ' + (j && j.error ? j.error : 'unknown')); })
+                        .catch(function(e){ console.error(e); alert('Ошибка при сохранении: ' + (e && (e.detail || e.error) ? (e.detail || e.error) : (e && e.message ? e.message : 'unknown'))); });
+                });
+
+                editBtn.addEventListener('click', function(){ enable(); });
+            }
+
+            // attach to both tables
+            attachAdminControlsFor('bingo', 'bingo-totals-table');
+            attachAdminControlsFor('bedwars', 'bedwars-totals-table');
+
+        })();
+    </script>
+    {% endif %}
+
+{% if game.slug == 'monopoly' %}
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+    <h2 style="color: var(--danger); margin-top: 0;">Результаты</h2>
+    
+    {% if is_admin and game.slug == 'monopoly' %}
+    <div style="margin-bottom: 16px;">
+        <button id="monopolyEditTableBtn" type="button" style="background:#e60078; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать</button>
+        <button id="monopolySaveTableBtn" type="button" style="display:none; background:#28a745; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Сохранить</button>
+        <button id="monopolyCancelTableBtn" type="button" style="display:none; background:#333; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Отменить</button>
+        <button id="monopolyAddRowBtn" type="button" style="background:#ffd9b3; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:12px;">+ Строка</button>
+        <button id="monopolyDownloadAllBtn" type="button" style="background:#e6e6e6; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:6px;">Загрузить всех</button>
+    </div>
+    {% endif %}
+    
+    <table class="leaderboard" id="monopoly-table">
+        <thead>
+            <tr>
+                <th>Команда</th>
+                <th>Участник</th>
+                <th>Очки</th>
+                {% if is_admin %}<th>Действия</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if scores %}
+                {% for result in scores %}
+                <tr data-score-id="{{ result.id }}">
+                    <td>{{ result.team.name if result.team else '—' }}</td>
+                    <td>{{ result.participant.name if result.participant else '—' }}</td>
+                    <td class="score-cell" data-original="{{ result.score }}">{{ result.score }}</td>
+                    {% if is_admin %}
+                    <td><button type="button" class="delete-row-btn" data-score-id="{{ result.id }}" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{% if is_admin %}4{% else %}3{% endif %}" style="text-align: center; color: #ddd;">Результатов пока нет. Добавьте их в админке.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_admin and game.slug == 'monopoly' %}
+<script>
+    (function(){
+        var GAME_ID = {{ game.id }};
+        var editBtn = document.getElementById('monopolyEditTableBtn');
+        var saveBtn = document.getElementById('monopolySaveTableBtn');
+        var cancelBtn = document.getElementById('monopolyCancelTableBtn');
+        var scoresTable = document.getElementById('monopoly-table');
+
+        if (!editBtn) return;
+
+        if (scoresTable) {
+            scoresTable.addEventListener('click', function(event) {
+                var deleteRowBtn = event.target.closest('.delete-row-btn');
+                if (deleteRowBtn && scoresTable.contains(deleteRowBtn)) {
+                    var scoreId = deleteRowBtn.dataset.scoreId;
+                    if (!scoreId) return;
+                    var form = new FormData();
+                    form.append('score_id', scoreId);
+                    fetch('/admin/delete_score', { method: 'POST', credentials: 'same-origin', body: form })
+                        .then(function(){ location.reload(); })
+                        .catch(function(){ alert('Ошибка при удалении строки'); });
+                    return;
+                }
+                var scoreTd = event.target.closest('.score-cell');
+                if (scoreTd && scoresTable.contains(scoreTd) && editMode) {
+                    makeScoreCellEditable(scoreTd);
+                }
+            });
+        }
+
+        var editMode = false;
+        var scoreChanges = {};
+        var ALL_TEAMS = [
+            {% for t in teams %}
+            { id: {{ t.id }}, name: {{ t.name | tojson }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        var ALL_PARTICIPANTS = [
+            {% for p in participants %}
+            { id: {{ p.id }}, name: {{ p.name | tojson }}, team_id: {{ p.team.id if p.team else 0 }}, team_name: {{ p.team.name | tojson if p.team else '""' }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function buildTeamOptions(selectedId) {
+            var html = '<option value="0">— без команды —</option>';
+            ALL_TEAMS.forEach(function(team){
+                html += '<option value="' + team.id + '"' + (team.id === selectedId ? ' selected' : '') + '>' + escapeHtml(team.name) + '</option>';
+            });
+            html += '<option value="__new">— создать новую —</option>';
+            return html;
+        }
+
+        function buildParticipantOptions(selectedId) {
+            var html = '<option value="0">— без участника —</option>';
+            ALL_PARTICIPANTS.forEach(function(part){
+                var label = escapeHtml(part.name) + (part.team_name ? ' (' + escapeHtml(part.team_name) + ')' : '');
+                html += '<option value="' + part.id + '"' + (part.id === selectedId ? ' selected' : '') + '>' + label + '</option>';
+            });
+            html += '<option value="__new">— создать нового —</option>';
+            return html;
+        }
+
+        function makeScoreCellEditable(td) {
+            if (!td || td.querySelector('.score-editor-input')) return;
+            var orig = td.dataset.original || '';
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.value = orig;
+            input.style.width = '80px';
+            input.style.padding = '4px';
+            input.style.borderRadius = '4px';
+            input.style.background = '#2a2a2a';
+            input.style.color = '#fff';
+            input.style.border = '1px solid #555';
+            input.className = 'score-editor-input';
+            td.innerHTML = '';
+            td.appendChild(input);
+            input.focus();
+            input.select();
+        }
+
+        function restoreScoreCell(td) {
+            if (!td) return;
+            var input = td.querySelector('.score-editor-input');
+            var value = td.dataset.original || '';
+            if (input) {
+                value = input.value;
+                td.dataset.original = value;
+            }
+            td.textContent = value;
+        }
+
+        function collectScoreChanges() {
+            scoreChanges = {};
+            if (!scoresTable) return;
+            scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                var td = row.querySelector('.score-cell');
+                if (!td) return;
+                var input = td.querySelector('input');
+                if (!input) return;
+                var sid = row.dataset.scoreId;
+                var orig = td.dataset.original || '';
+                var v = input.value;
+                if (String(v) !== String(orig)) {
+                    scoreChanges[sid] = v;
+                }
+                td.dataset.original = v;
+            });
+        }
+
+        function enableEditMode(){
+            editMode = true;
+            editBtn.style.display = 'none';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            if (scoresTable) {
+                scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                    var td = row.querySelector('.score-cell');
+                    if (td && !td.querySelector('.score-editor-input')) {
+                        makeScoreCellEditable(td);
+                    }
+                });
+            }
+        }
+
+        function disableEditMode(){
+            editMode = false;
+            editBtn.style.display = 'inline-block';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+            if (scoresTable) {
+                scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                    var td = row.querySelector('.score-cell');
+                    restoreScoreCell(td);
+                });
+            }
+        }
+
+        editBtn.addEventListener('click', function(){ enableEditMode(); });
+
+        cancelBtn.addEventListener('click', function(){
+            if (scoresTable) {
+                scoresTable.querySelectorAll('tr[data-score-id]').forEach(function(row){
+                    var td = row.querySelector('.score-cell');
+                    if (!td) return;
+                    var orig = td.dataset.original;
+                    td.innerHTML = '<span class="score-display">'+ (orig === '' ? '—' : orig) +'</span>';
+                });
+            }
+            scoreChanges = {};
+            disableEditMode();
+        });
+
+        saveBtn.addEventListener('click', function(){
+            Array.from(scoresTable.querySelectorAll('.score-cell input')).forEach(function(input){ input.blur(); });
+            setTimeout(function() {
+                collectScoreChanges();
+                var promises = [];
+                var scoreIds = Object.keys(scoreChanges);
+                if (scoreIds.length > 0) {
+                    var payload = { scores: [] };
+                    scoreIds.forEach(function(id){ payload.scores.push({ id: id, score: scoreChanges[id] }); });
+                    promises.push(fetch('/admin/update_scores_bulk', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
+                }
+
+                if (promises.length === 0) { alert('Нет изменений для сохранения'); return; }
+
+                Promise.all(promises).then(function(res){
+                    return Promise.all(res.map(function(r){ return r.ok ? r : Promise.reject(r); }));
+                }).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при сохранении'); });
+            }, 10);
+        });
+
+        var addRowBtn = document.getElementById('monopolyAddRowBtn');
+        var downloadAllBtn = document.getElementById('monopolyDownloadAllBtn');
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', function(){
+                var row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><select class="team-select">${buildTeamOptions(0)}</select></td>
+                    <td><select class="part-select">${buildParticipantOptions(0)}</select></td>
+                    <td><input type="number" class="score-input" value="0" style="width:80px;"></td>
+                    <td><button class="save-inline">Сохранить</button> <button class="cancel-inline">Отмена</button></td>
+                `;
+                scoresTable.querySelector('tbody').insertBefore(row, scoresTable.querySelector('tbody').firstChild);
+                
+                row.querySelector('.save-inline').addEventListener('click', function(){
+                    var team_val = row.querySelector('.team-select').value;
+                    var part_val = row.querySelector('.part-select').value;
+                    var score = row.querySelector('.score-input').value;
+                    var payload = { game_id: GAME_ID, score: score };
+                    if (team_val && team_val !== '0') payload.team_id = team_val;
+                    if (part_val && part_val !== '0') payload.participant_id = part_val;
+                    fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                        .then(function(res){ return res.json(); })
+                        .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка'); })
+                        .catch(function(){ alert('Ошибка при добавлении'); });
+                });
+                row.querySelector('.cancel-inline').addEventListener('click', function(){ row.remove(); });
+            });
+        }
+        if (downloadAllBtn) {
+            downloadAllBtn.addEventListener('click', function(){
+                var present = new Set();
+                scoresTable.querySelectorAll('tbody tr').forEach(function(r){
+                    var partCell = r.querySelector('td:nth-child(2)');
+                    if (partCell) present.add(partCell.textContent.trim());
+                });
+                var ops = [];
+                ALL_PARTICIPANTS.forEach(function(p){
+                    if (!present.has(p.name)) {
+                        ops.push({ game_id: GAME_ID, participant_id: p.id, team_id: p.team_id || undefined, score: 0 });
+                    }
+                });
+                if (!ops.length){ alert('Нечего загружать'); return; }
+                Promise.all(ops.map(function(payload){
+                    return fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                        .then(function(res){ return res.json(); });
+                })).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при загрузке всех'); });
+            });
+        }
+    })();
+</script>
+{% endif %}
+
+{% endif %}
+
+{% if game.slug == 'quiz' %}
+<div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
+    <h2 style="color: var(--danger); margin-top: 0;">Результаты</h2>
+    
+    {% if is_admin and game.slug == 'quiz' %}
+    <div style="margin-bottom: 16px;">
+        <button id="quizEditTableBtn" type="button" style="background:#e60078; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать</button>
+        <button id="quizSaveTableBtn" type="button" style="display:none; background:#28a745; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Сохранить</button>
+        <button id="quizCancelTableBtn" type="button" style="display:none; background:#333; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Отменить</button>
+        <button id="quizAddRowBtn" type="button" style="background:#ffd9b3; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:12px;">+ Строка</button>
+        <button id="quizDownloadAllBtn" type="button" style="background:#e6e6e6; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700; margin-left:6px;">Загрузить всех</button>
+    </div>
+    {% endif %}
+    
+    <table class="leaderboard" id="quiz-table">
+        <thead>
+            <tr>
+                <th>Команда</th>
+                <th>Очки</th>
+                {% if is_admin %}<th>Действия</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% set quiz_data = namespace(teams={}) %}
+            {% for result in scores %}
+                {% if result.team and not result.participant %}
+                    {% set team_name = result.team.name %}
+                    {% set current = quiz_data.teams.get(team_name, {'id': result.id, 'score': 0}) %}
+                    {% set _ = quiz_data.teams.update({team_name: {'id': result.id, 'score': current['score'] + (result.score or 0)}}) %}
+                {% endif %}
+            {% endfor %}
+            {% if quiz_data.teams %}
+                {% for team_name, team_info in quiz_data.teams.items() %}
+                <tr data-score-id="{{ team_info.id }}" data-team-name="{{ team_name }}">
+                    <td>{{ team_name }}</td>
+                    <td class="score-cell" data-original="{{ team_info.score }}">{{ team_info.score }}</td>
+                    {% if is_admin %}
+                    <td><button type="button" class="delete-row-btn" data-score-id="{{ team_info.id }}" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{% if is_admin %}3{% else %}2{% endif %}" style="text-align: center; color: #ddd;">Результатов пока нет. Добавьте их в админке.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_admin and game.slug == 'quiz' %}
+<script>
+    (function(){
+        var GAME_ID = {{ game.id }};
+        var editBtn = document.getElementById('quizEditTableBtn');
+        var saveBtn = document.getElementById('quizSaveTableBtn');
+        var cancelBtn = document.getElementById('quizCancelTableBtn');
+        var addRowBtn = document.getElementById('quizAddRowBtn');
+        var downloadAllBtn = document.getElementById('quizDownloadAllBtn');
+        var scoresTable = document.getElementById('quiz-table');
+
+        if (!editBtn || !scoresTable) return;
+
+        var editMode = false;
+        var scoreChanges = {};
+
+        var ALL_TEAMS = [
+            {% for t in teams %}
+            { id: {{ t.id }}, name: {{ t.name | tojson }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function buildTeamOptions(selectedId) {
+            var html = '<option value="0">— без команды —</option>';
+            ALL_TEAMS.forEach(function(team){
+                html += '<option value="' + team.id + '"' + (team.id === selectedId ? ' selected' : '') + '>' + escapeHtml(team.name) + '</option>';
+            });
+            html += '<option value="__new">— создать новую —</option>';
+            return html;
+        }
+
+        function makeScoreCellEditable(td) {
+            if (!td || td.querySelector('.score-editor-input')) return;
+            var orig = td.dataset.original || '';
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.value = orig;
+            input.style.width = '80px';
+            input.style.padding = '4px';
+            input.style.borderRadius = '4px';
+            input.style.background = '#2a2a2a';
+            input.style.color = '#fff';
+            input.style.border = '1px solid #555';
+            input.className = 'score-editor-input';
+            td.innerHTML = '';
+            td.appendChild(input);
+            input.focus();
+            input.select();
+        }
+
+        function enableEditMode() {
+            editMode = true;
+            editBtn.style.display = 'none';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            console.log('enableEditMode: starting, will update', scoresTable.querySelectorAll('tbody tr').length, 'rows');
+            scoresTable.querySelectorAll('tbody tr').forEach(function(row) {
+                var scoreTd = row.querySelector('.score-cell');
+                console.log('  processing row, score-cell found:', !!scoreTd, 'has score-editor-input:', scoreTd ? !!scoreTd.querySelector('.score-editor-input') : 'N/A');
+                if (scoreTd && !scoreTd.querySelector('.score-editor-input')) {
+                    console.log('  calling makeScoreCellEditable on score cell');
+                    makeScoreCellEditable(scoreTd);
+                }
+            });
+            console.log('enableEditMode: complete');
+        }
+
+        function restoreScoreCell(td) {
+            var orig = td.dataset.original || '';
+            td.textContent = orig;
+        }
+
+        function disableEditMode() {
+            editMode = false;
+            editBtn.style.display = 'inline-block';
+            saveBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+            scoreChanges = {};
+            scoresTable.querySelectorAll('.score-cell').forEach(function(td){ restoreScoreCell(td); });
+        }
+
+        function collectScoreChanges() {
+            var changes = {};
+            console.log('collectScoreChanges: starting');
+            scoresTable.querySelectorAll('tbody tr').forEach(function(row) {
+                var scoreId = row.dataset.scoreId;
+                var scoreTd = row.querySelector('.score-cell');
+                var scoreInput = scoreTd ? scoreTd.querySelector('.score-editor-input') : null;
+                var orig = (scoreTd ? scoreTd.dataset.original : '') || '';
+                console.log('  row scoreId:', scoreId, 'orig:', orig, 'has score-editor-input:', !!scoreInput);
+                if (scoreId && scoreInput) {
+                    var newVal = scoreInput.value;
+                    if (String(newVal) !== String(orig)) {
+                        console.log('    adding to changes: scoreId=', scoreId, 'orig=', orig, 'new=', newVal);
+                        changes[scoreId] = parseFloat(newVal) || 0;
+                    } else {
+                        console.log('    value unchanged, skipping');
+                    }
+                }
+            });
+            console.log('collectScoreChanges: complete, found', Object.keys(changes).length, 'changes:', changes);
+            return changes;
+        }
+
+        editBtn.addEventListener('click', function(){ 
+            console.log('Quiz edit button clicked, editMode before:', editMode);
+            enableEditMode(); 
+            console.log('Quiz edit mode enabled, editMode after:', editMode);
+        });
+        cancelBtn.addEventListener('click', function(){ disableEditMode(); });
+
+        scoresTable.addEventListener('click', function(event) {
+            var deleteRowBtn = event.target.closest('.delete-row-btn');
+            if (deleteRowBtn && scoresTable.contains(deleteRowBtn)) {
+                var scoreId = deleteRowBtn.dataset.scoreId;
+                if (!scoreId) return;
+                var form = new FormData();
+                form.append('score_id', scoreId);
+                fetch('/admin/delete_score', { method: 'POST', credentials: 'same-origin', body: form })
+                    .then(function(){ location.reload(); })
+                    .catch(function(){ alert('Ошибка при удалении строки'); });
+                return;
+            }
+            var scoreTd = event.target.closest('.score-cell');
+            if (scoreTd && scoresTable.contains(scoreTd) && editMode) {
+                console.log('Score cell clicked in edit mode, calling makeScoreCellEditable');
+                makeScoreCellEditable(scoreTd);
+            }
+        });
+
+        saveBtn.addEventListener('click', function(){
+            console.log('Save button clicked');
+            var changes = collectScoreChanges();
+            console.log('Collected changes:', changes);
+            var scoreIds = Object.keys(changes);
+            if (scoreIds.length === 0) { alert('Нет изменений'); return; }
+            var payload = { scores: [] };
+            scoreIds.forEach(function(id){ 
+                payload.scores.push({ id: parseInt(id), score: parseFloat(changes[id]) }); 
+            });
+            fetch('/admin/update_scores_bulk', { 
+                method: 'POST', 
+                credentials: 'same-origin', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
+            })
+            .then(function(res){ return res.json(); })
+            .then(function(j){ 
+                if (j && j.status === 'ok') location.reload();
+                else alert('Ошибка: ' + (j.error || 'неизвестная')); 
+            })
+            .catch(function(e){ alert('Ошибка сохранения: ' + e.message); });
+        });
+
+        addRowBtn.addEventListener('click', function(){
+            var tbody = scoresTable.querySelector('tbody');
+            if (!tbody) return;
+            var row = document.createElement('tr');
+            row.style.background = 'rgba(255, 255, 0, 0.1)';
+            row.innerHTML = '<td><select class="team-select" style="background:#2a2a2a; color:#fff; padding:6px; border:1px solid #555; border-radius:4px;">' + buildTeamOptions(0) + '</select></td>' +
+                '<td><input type="number" class="score-input" value="0" style="width:80px; padding:4px; background:#2a2a2a; color:#fff; border:1px solid #555; border-radius:4px;"></td>' +
+                '<td><button class="save-inline" style="background:#28a745; color:#fff; padding:6px 10px; border:none; border-radius:4px; margin-right:6px; cursor:pointer;">Ok</button>' +
+                '<button class="cancel-inline" style="background:#666; color:#fff; padding:6px 10px; border:none; border-radius:4px; cursor:pointer;">Отмена</button></td>';
+            tbody.appendChild(row);
+            row.querySelector('.save-inline').addEventListener('click', function(){
+                var team_val = row.querySelector('.team-select').value;
+                var score = row.querySelector('.score-input').value;
+                var payload = { game_id: GAME_ID, score: score };
+                if (team_val && team_val !== '0') payload.team_id = team_val;
+                fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                    .then(function(res){ return res.json(); })
+                    .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка'); })
+                    .catch(function(){ alert('Ошибка при добавлении'); });
+            });
+            row.querySelector('.cancel-inline').addEventListener('click', function(){ row.remove(); });
+        });
+
+        if (downloadAllBtn) {
+            downloadAllBtn.addEventListener('click', function(){
+                var present = new Set();
+                scoresTable.querySelectorAll('tbody tr').forEach(function(r){
+                    var teamCell = r.querySelector('td:nth-child(1)');
+                    if (teamCell) present.add(teamCell.textContent.trim());
+                });
+                var ops = [];
+                ALL_TEAMS.forEach(function(team){
+                    if (!present.has(team.name)) {
+                        ops.push({ game_id: GAME_ID, team_id: team.id, score: 0 });
+                    }
+                });
+                if (!ops.length){ alert('Нечего загружать'); return; }
+                Promise.all(ops.map(function(payload){
+                    return fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                        .then(function(res){ return res.json(); });
+                })).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при загрузке всех'); });
+            });
+        }
+    })();
+</script>
+{% endif %}
+
+{% endif %}
+
+<script>
+    (function() {
+        var quizTable = document.getElementById('quiz-table');
+        if (quizTable) {
+            var tbody = quizTable.querySelector('tbody');
+            if (tbody) {
+                var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row){ return row.querySelector('td'); });
+                rows.sort(function(a,b){
+                    var pa = parseFloat(String(a.querySelector('td:nth-child(2)').textContent||'').replace(',','.'))||-Infinity;
+                    var pb = parseFloat(String(b.querySelector('td:nth-child(2)').textContent||'').replace(',','.'))||-Infinity;
+                    return pb - pa;
+                });
+                rows.forEach(function(r){ tbody.appendChild(r); });
+            }
+        }
+    })();
+</script>
 
 <script>
     // Оптимизированный параллакс фона
@@ -369,7 +1210,7 @@
                     if (!scoreId) return;
                     var form = new FormData();
                     form.append('score_id', scoreId);
-                    fetch('/admin/delete_score', { method: 'POST', body: form })
+                    fetch('/admin/delete_score', { method: 'POST', credentials: 'same-origin', body: form })
                         .then(function(){ location.reload(); })
                         .catch(function(){ alert('Ошибка при удалении строки'); });
                     return;
@@ -478,7 +1319,7 @@
                 } else if (participant_val && participant_val !== '0') {
                     payload.participant_id = participant_val;
                 }
-                fetch('/admin/add_score_inline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
                     .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); })
                     .then(function(j){ if (j && j.status === 'ok') location.reload(); else alert('Ошибка: ' + (j && j.error ? j.error : 'unknown')); })
                     .catch(function(e){ console.error(e); alert('Ошибка при добавлении строки'); });
@@ -517,7 +1358,7 @@
                     if (!scoreId) return;
                     var form = new FormData();
                     form.append('score_id', scoreId);
-                    fetch('/admin/delete_score', { method: 'POST', body: form }).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при удалении строки'); });
+                    fetch('/admin/delete_score', { method: 'POST', credentials: 'same-origin', body: form }).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при удалении строки'); });
                 });
             });
         }
@@ -549,7 +1390,7 @@
                 return;
             }
             Promise.all(payloads.map(function(payload){
-                return fetch('/admin/add_score_inline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                return fetch('/admin/add_score_inline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
                     .then(function(res){ if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); });
             })).then(function(){ location.reload(); }).catch(function(){ alert('Ошибка при загрузке всех строк'); });
         }
@@ -741,7 +1582,7 @@
             if (scoreIds.length > 0) {
                 var payload = { scores: [] };
                 scoreIds.forEach(function(id){ payload.scores.push({ id: id, score: scoreChanges[id] }); });
-                promises.push(fetch('/admin/update_scores_bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
+                promises.push(fetch('/admin/update_scores_bulk', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
             }
 
             // prepare rr match updates: group by match_key, need to send full match (team ids + both sides)
@@ -771,7 +1612,7 @@
                 form.append('team_b_id', teamB);
                 form.append('score_a', scoreA === null ? '' : scoreA);
                 form.append('score_b', scoreB === null ? '' : scoreB);
-                rrPromises.push(fetch('/admin/round_robin_save', { method: 'POST', body: form }));
+                rrPromises.push(fetch('/admin/round_robin_save', { method: 'POST', credentials: 'same-origin', body: form }));
             });
                 if (rrPromises.length) promises = promises.concat(rrPromises);
 
