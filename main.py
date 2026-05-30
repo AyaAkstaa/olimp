@@ -1,4 +1,6 @@
-﻿from fastapi import FastAPI, Request, Form, Depends, HTTPException
+﻿from urllib import request
+
+from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -372,6 +374,10 @@ def login_page(request: Request):
 
 @app.post("/login")
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
     print(f"Login attempt: username='{username}', password='{password}'")
     uname = username.strip()
     pwd = password or ""
@@ -398,6 +404,10 @@ def favicon():
 
 @app.post("/admin/add_team")
 def add_team(team_name: str = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
     if team_name.strip():
         team = Team(name=team_name.strip())
         db.add(team)
@@ -415,6 +425,10 @@ def admin_logout():
 
 @app.post("/admin/add_participant")
 def add_participant(team_id: int = Form(...), participant_name: str = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
     if participant_name.strip():
         participant = Participant(name=participant_name.strip(), team_id=team_id)
         db.add(participant)
@@ -432,6 +446,10 @@ def add_score(
     notes: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
     new_score = Score(
         game_id=game_id,
         stage=stage.strip(),
@@ -448,6 +466,10 @@ def add_score(
 
 @app.post("/admin/update_score")
 def update_score(score_id: int = Form(...), score: int = Form(...), notes: str = Form(""), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
     record = db.query(Score).filter(Score.id == score_id).first()
     if record:
         record.score = score
@@ -565,6 +587,7 @@ async def add_score_inline(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/admin/scores_batch_minecraft")
 async def scores_batch_minecraft(request: Request, db: Session = Depends(get_db)):
+
     # admin-only
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
@@ -812,6 +835,11 @@ async def scores_batch_minecraft(request: Request, db: Session = Depends(get_db)
 
 @app.post("/admin/delete_score")
 def delete_score(score_id: int = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     record = db.query(Score).filter(Score.id == score_id).first()
     if record:
         db.delete(record)
@@ -828,6 +856,11 @@ def add_schedule(
     description: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     if title.strip() and time.strip():
         schedule_item = ScheduleItem(
             game_id=game_id,
@@ -843,6 +876,11 @@ def add_schedule(
 
 @app.post("/admin/delete_schedule")
 def delete_schedule(schedule_id: int = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     item = db.query(ScheduleItem).filter(ScheduleItem.id == schedule_id).first()
     if item:
         db.delete(item)
@@ -860,6 +898,11 @@ def update_schedule(
     description: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     item = db.query(ScheduleItem).filter(ScheduleItem.id == schedule_id).first()
     if item:
         item.game_id = game_id
@@ -873,6 +916,11 @@ def update_schedule(
 
 @app.post("/admin/delete_team")
 def delete_team(team_id: int = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     team = db.query(Team).filter(Team.id == team_id).first()
     if team:
         db.delete(team)
@@ -882,6 +930,11 @@ def delete_team(team_id: int = Form(...), db: Session = Depends(get_db)):
 
 @app.post("/admin/update_team")
 def update_team(team_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     team = db.query(Team).filter(Team.id == team_id).first()
     if team and name.strip():
         team.name = name.strip()
@@ -891,6 +944,11 @@ def update_team(team_id: int = Form(...), name: str = Form(...), db: Session = D
 
 @app.post("/admin/delete_participant")
 def delete_participant(participant_id: int = Form(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     p = db.query(Participant).filter(Participant.id == participant_id).first()
     if p:
         db.delete(p)
@@ -900,6 +958,11 @@ def delete_participant(participant_id: int = Form(...), db: Session = Depends(ge
 
 @app.post("/admin/update_participant")
 def update_participant(participant_id: int = Form(...), name: str = Form(...), team_id: int = Form(0), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
     p = db.query(Participant).filter(Participant.id == participant_id).first()
     if p and name.strip():
         p.name = name.strip()
