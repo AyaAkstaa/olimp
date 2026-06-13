@@ -374,10 +374,6 @@ def login_page(request: Request):
 
 @app.post("/login")
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
-    cookie_user = request.cookies.get("admin_user")
-    cookie_token = request.cookies.get("admin_token")
-    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
-        return RedirectResponse(url="/login", status_code=303)
     print(f"Login attempt: username='{username}', password='{password}'")
     uname = username.strip()
     pwd = password or ""
