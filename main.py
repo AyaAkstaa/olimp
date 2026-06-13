@@ -410,6 +410,9 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
         teams=teams,
         participants=participants,
         is_admin=is_admin,
+        tictactoe_image_url=tictactoe_image_url,
+        tictactoe_placements=tictactoe_placements,
+        team_participants=team_participants,
     )
 
 
