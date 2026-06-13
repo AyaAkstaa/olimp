@@ -133,6 +133,13 @@ class Settings(Base):
     key = Column(String, unique=True, index=True)
     value = Column(String, default="")
 
+class GameImage(Base):
+    __tablename__ = "game_images"
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id"), unique=True)
+    image_path = Column(String, default="")
+    game = relationship("Game")
+
 # create tables
 Base.metadata.create_all(bind=engine)
 
@@ -390,6 +397,12 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
     participants = db.query(Participant).order_by(Participant.name).all()
     # build mapping for tooltips
     team_participants = {t.name: ', '.join([p.name for p in t.participants]) for t in teams}
+    tictactoe_image = db.query(GameImage).filter(GameImage.game_id == game.id).first()
+    tictactoe_image_url = f"/static/{tictactoe_image.image_path}" if tictactoe_image and tictactoe_image.image_path else None
+    tictactoe_placements = {}
+    if game.slug == 'tictactoe':
+        placements = db.query(Score).filter(Score.game_id == game.id, Score.stage.in_(['1 место', '2 место', '3 место'])).all()
+        tictactoe_placements = {placement.stage: placement for placement in placements}
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     is_admin = bool(cookie_user and cookie_token and _verify_admin_token(cookie_token, cookie_user))
@@ -404,6 +417,8 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
         teams=teams,
         participants=participants,
         is_admin=is_admin,
+        tictactoe_image_url=tictactoe_image_url,
+        tictactoe_placements=tictactoe_placements,
         team_participants=team_participants,
     )
 
@@ -656,6 +671,126 @@ async def add_score_inline(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(rec)
     return JSONResponse({"status": "ok", "score_id": rec.id})
+
+
+@app.post("/admin/upload_game_image")
+async def upload_game_image(request: Request, game_slug: str = Form(...), file: UploadFile = File(...), db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({"status": "error", "error": "Unauthorized"}, status_code=401)
+
+    game = db.query(Game).filter(Game.slug == game_slug).first()
+    if not game:
+        return JSONResponse({"status": "error", "error": "Game not found"}, status_code=404)
+
+    contents = await file.read()
+    if not contents:
+        return JSONResponse({"status": "error", "error": "Empty file"}, status_code=400)
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+        ext = '.png'
+
+    upload_dir = BASE_DIR / 'картинки' / 'uploads'
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{game.slug}_{int(time.time())}{ext}"
+    target_path = upload_dir / filename
+    target_path.write_bytes(contents)
+
+    game_image = db.query(GameImage).filter(GameImage.game_id == game.id).first()
+    if game_image:
+        old_path = BASE_DIR / 'картинки' / game_image.image_path
+        try:
+            if old_path.exists():
+                old_path.unlink()
+        except Exception:
+            pass
+        game_image.image_path = f"uploads/{filename}"
+    else:
+        game_image = GameImage(game_id=game.id, image_path=f"uploads/{filename}")
+        db.add(game_image)
+
+    db.commit()
+    return JSONResponse({"status": "ok", "image_url": f"/static/{game_image.image_path}"})
+
+
+@app.post('/admin/save_tictactoe_placements')
+async def save_tictactoe_placements(request: Request, db: Session = Depends(get_db)):
+    cookie_user = request.cookies.get('admin_user')
+    cookie_token = request.cookies.get('admin_token')
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return JSONResponse({'status': 'error', 'error': 'Unauthorized'}, status_code=401)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({'status': 'error', 'error': 'invalid_json'}, status_code=400)
+
+    game_slug = payload.get('game_slug')
+    if not game_slug:
+        return JSONResponse({'status': 'error', 'error': 'missing_game_slug'}, status_code=400)
+
+    game = db.query(Game).filter(Game.slug == game_slug).first()
+    if not game:
+        return JSONResponse({'status': 'error', 'error': 'Game not found'}, status_code=404)
+
+    placements = payload.get('placements') or []
+    if not isinstance(placements, list):
+        return JSONResponse({'status': 'error', 'error': 'invalid_placements'}, status_code=400)
+
+    existing = {
+        score.stage: score
+        for score in db.query(Score).filter(Score.game_id == game.id, Score.stage.in_(['1 место', '2 место', '3 место'])).all()
+    }
+
+    for item in placements:
+        rank = item.get('rank')
+        if rank not in [1, 2, 3]:
+            continue
+        stage = f'{rank} место'
+        try:
+            points = int(item.get('points', 0))
+        except Exception:
+            points = 0
+        team_id = item.get('team_id')
+        participant_id = item.get('participant_id')
+        try:
+            team_id = int(team_id) if team_id not in (None, '', 0, '0') else None
+        except Exception:
+            team_id = None
+        try:
+            participant_id = int(participant_id) if participant_id not in (None, '', 0, '0') else None
+        except Exception:
+            participant_id = None
+
+        if not team_id and not participant_id and points == 0:
+            if stage in existing:
+                db.delete(existing[stage])
+            continue
+
+        if stage in existing:
+            record = existing[stage]
+            record.score = points
+            record.team_id = team_id
+            record.participant_id = participant_id
+            record.match_title = ''
+            record.notes = ''
+        else:
+            record = Score(
+                game_id=game.id,
+                stage=stage,
+                match_title='',
+                team_id=team_id if team_id else None,
+                participant_id=participant_id if participant_id else None,
+                score=points,
+                notes='',
+            )
+            db.add(record)
+            existing[stage] = record
+
+    db.commit()
+    return JSONResponse({'status': 'ok'})
 
 
 @app.post("/admin/scores_batch_minecraft")
