@@ -154,6 +154,72 @@
     {% endif %}
 </div>
 
+{% if game.slug == 'tictactoe' %}
+<div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
+    <h2 style="color: var(--danger); margin-top: 0;">Результаты</h2>
+
+    {% if tictactoe_image_url %}
+    <div style="text-align:center; margin-top:18px;">
+        <img id="tictactoe-result-image" src="{{ tictactoe_image_url }}" alt="Результаты крестиков-ноликов" style="max-width:100%; height:auto; border:2px solid rgba(230,0,122,0.8); border-radius:16px;" />
+    </div>
+    {% elif is_admin %}
+    <p style="color:#ddd;">Результат пока не загружен. Администратор может вставить изображение.</p>
+    {% endif %}
+
+    {% if is_admin %}
+    <div id="tictactoe-image-uploader" style="margin-top:18px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:center;">
+        <button id="pasteImageBtn" type="button" style="background:#e60078; padding:12px 20px; border:none; color:#fff; cursor:pointer; border-radius:8px; font-weight:700;">Вставить картинку (Ctrl+V)</button>
+        <button id="selectImageBtn" type="button" style="background:#28a745; padding:12px 20px; border:none; color:#fff; cursor:pointer; border-radius:8px; font-weight:700;">Выбрать файл</button>
+        <input id="tictactoeImageFile" type="file" accept="image/*" style="display:none;">
+    </div>
+    <p id="tictactoeUploadHint" style="margin-top:12px; color:#ddd; text-align:center; font-size:0.95rem;">Нажмите кнопку и вставьте изображение из буфера обмена или выберите файл.</p>
+    <div style="margin-bottom: 16px; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+        <button id="tictactoeEditTableBtn" type="button" style="background:#e60078; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Редактировать</button>
+        <button id="tictactoeSaveTableBtn" type="button" style="display:none; background:#28a745; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Сохранить</button>
+        <button id="tictactoeCancelTableBtn" type="button" style="display:none; background:#333; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700;">Отменить</button>
+        <button id="tictactoeAddRowBtn" type="button" style="background:#ffd9b3; padding:10px 14px; border:none; color:#000; cursor:pointer; border-radius:4px; font-weight:700;">+ Строка</button>
+    </div>
+    {% endif %}
+
+    <table class="leaderboard" id="tictactoe-table" style="margin-top:24px;">
+        <thead>
+            <tr>
+                <th>Место</th>
+                <th>Команда / Участник</th>
+                <th>Баллы</th>
+                {% if is_admin %}<th>Действия</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for rank in [1, 2, 3] %}
+            {% set stage = rank ~ ' место' %}
+            {% set placement = tictactoe_placements.get(stage) %}
+            <tr data-stage="{{ stage }}" data-score-id="{{ placement.id if placement else '' }}" data-team-id="{{ placement.team.id if placement and placement.team else 0 }}" data-participant-id="{{ placement.participant.id if placement and placement.participant else 0 }}">
+                <td>{{ rank }}</td>
+                <td>
+                    {% if placement %}
+                        {% if placement.participant %}
+                            {{ placement.participant.name }}{% if placement.team %} ({{ placement.team.name }}){% endif %}
+                        {% elif placement.team %}
+                            {{ placement.team.name }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="score-cell" data-original="{{ placement.score if placement else 0 }}">{{ placement.score if placement else 0 }}</td>
+                {% if is_admin %}
+                <td><button type="button" class="delete-row-btn" data-score-id="{{ placement.id if placement else '' }}" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if game.slug == 'geoguessr' %}
 <div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
     <h2 style="color: var(--danger); margin-top: 0;">Круговик</h2>
@@ -607,6 +673,368 @@
 
         })();
     </script>
+    {% endif %}
+
+    {% if is_admin and game.slug == 'tictactoe' %}
+    <script>
+        (function(){
+            var GAME_ID = {{ game.id }};
+            var editBtn = document.getElementById('tictactoeEditTableBtn');
+            var saveBtn = document.getElementById('tictactoeSaveTableBtn');
+            var cancelBtn = document.getElementById('tictactoeCancelTableBtn');
+            var addRowBtn = document.getElementById('tictactoeAddRowBtn');
+            var scoresTable = document.getElementById('tictactoe-table');
+            var editMode = false;
+
+            if (!editBtn || !scoresTable) return;
+
+            var ALL_TEAMS = [
+                {% for t in teams %}
+                { id: {{ t.id }}, name: {{ t.name | tojson }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ];
+            var ALL_PARTICIPANTS = [
+                {% for p in participants %}
+                { id: {{ p.id }}, name: {{ p.name | tojson }}, team_id: {{ p.team.id if p.team else 0 }}, team_name: {{ p.team.name | tojson if p.team else '""' }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ];
+            var pasteButton = document.getElementById('pasteImageBtn');
+            var selectButton = document.getElementById('selectImageBtn');
+            var fileInput = document.getElementById('tictactoeImageFile');
+            var hint = document.getElementById('tictactoeUploadHint');
+            var activePaste = false;
+
+            function sendFile(file) {
+                var formData = new FormData();
+                formData.append('game_slug', 'tictactoe');
+                formData.append('file', file, file.name || 'paste.png');
+                fetch('/admin/upload_game_image', { method: 'POST', credentials: 'same-origin', body: formData })
+                    .then(function(res) { if (!res.ok) return res.json().then(function(j){ throw j; }); return res.json(); })
+                    .then(function(data) {
+                        if (data && data.status === 'ok') {
+                            if (data.image_url) {
+                                var img = document.getElementById('tictactoe-result-image');
+                                if (!img) {
+                                    var wrapper = document.createElement('div');
+                                    wrapper.style.textAlign = 'center';
+                                    wrapper.style.marginTop = '18px';
+                                    img = document.createElement('img');
+                                    img.id = 'tictactoe-result-image';
+                                    img.style.maxWidth = '100%';
+                                    img.style.height = 'auto';
+                                    img.style.border = '2px solid rgba(230,0,122,0.8)';
+                                    img.style.borderRadius = '16px';
+                                    wrapper.appendChild(img);
+                                    var container = document.querySelector('#tictactoe-image-uploader').parentNode;
+                                    container.insertBefore(wrapper, document.querySelector('#tictactoe-image-uploader'));
+                                }
+                                img.src = data.image_url;
+                            }
+                            if (hint) hint.textContent = 'Изображение сохранено.';
+                            activePaste = false;
+                        } else {
+                            if (hint) hint.textContent = 'Ошибка загрузки изображения.';
+                        }
+                    })
+                    .catch(function(err) {
+                        console.error(err);
+                        if (hint) hint.textContent = 'Ошибка при загрузке изображения.';
+                    });
+            }
+
+            document.addEventListener('paste', function(event) {
+                if (!activePaste) return;
+                var items = event.clipboardData && event.clipboardData.items;
+                if (!items) return;
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
+                        var file = item.getAsFile();
+                        if (file) {
+                            event.preventDefault();
+                            sendFile(file);
+                            activePaste = false;
+                            if (hint) hint.textContent = 'Загружаю изображение...';
+                            return;
+                        }
+                    }
+                }
+                if (hint) hint.textContent = 'В буфере нет изображения. Вставьте картинку снова.';
+            });
+
+            pasteButton && pasteButton.addEventListener('click', function() {
+                activePaste = true;
+                if (hint) hint.textContent = 'Нажмите Ctrl+V, чтобы вставить изображение из буфера обмена.';
+                pasteButton.focus();
+            });
+
+            selectButton && selectButton.addEventListener('click', function() {
+                if (fileInput) {
+                    fileInput.click();
+                }
+            });
+
+            fileInput && fileInput.addEventListener('change', function() {
+                if (!fileInput.files || !fileInput.files[0]) {
+                    return;
+                }
+                sendFile(fileInput.files[0]);
+                if (hint) hint.textContent = 'Загружаю изображение...';
+            });
+
+            function escapeHtml(text) {
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function buildTeamOptions(selectedId) {
+                var html = '<option value="0">— без команды —</option>';
+                ALL_TEAMS.forEach(function(team){
+                    html += '<option value="' + team.id + '"' + (team.id === selectedId ? ' selected' : '') + '>' + escapeHtml(team.name) + '</option>';
+                });
+                return html;
+            }
+
+            function buildParticipantOptions(selectedId) {
+                var html = '<option value="0">— без участника —</option>';
+                ALL_PARTICIPANTS.forEach(function(part){
+                    var label = escapeHtml(part.name) + (part.team_name ? ' (' + escapeHtml(part.team_name) + ')' : '');
+                    html += '<option value="' + part.id + '"' + (part.id === selectedId ? ' selected' : '') + '>' + label + '</option>';
+                });
+                return html;
+            }
+
+            function makeScoreCellEditable(td) {
+                if (!td || td.querySelector('.score-editor-input')) return;
+                var orig = td.dataset.original || '';
+                var input = document.createElement('input');
+                input.type = 'number';
+                input.value = orig;
+                input.style.width = '80px';
+                input.style.padding = '4px';
+                input.style.borderRadius = '4px';
+                input.style.background = '#2a2a2a';
+                input.style.color = '#fff';
+                input.style.border = '1px solid #555';
+                input.className = 'score-editor-input';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+            }
+
+            function restoreScoreCell(td) {
+                if (!td) return;
+                var input = td.querySelector('.score-editor-input');
+                if (input) {
+                    td.dataset.original = input.value;
+                    td.textContent = input.value;
+                } else {
+                    td.textContent = td.dataset.original || '0';
+                }
+            }
+
+            function enableEditMode() {
+                editMode = true;
+                editBtn.style.display = 'none';
+                saveBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'inline-block';
+                scoresTable.querySelectorAll('tbody tr').forEach(function(row) {
+                    var td = row.querySelector('.score-cell');
+                    if (td) {
+                        makeScoreCellEditable(td);
+                    }
+                });
+            }
+
+            function disableEditMode() {
+                editMode = false;
+                editBtn.style.display = 'inline-block';
+                saveBtn.style.display = 'none';
+                cancelBtn.style.display = 'none';
+                scoresTable.querySelectorAll('tbody tr').forEach(function(row) {
+                    restoreScoreCell(row.querySelector('.score-cell'));
+                    if (row.classList.contains('new-row')) {
+                        row.remove();
+                    }
+                });
+            }
+
+            function collectPlacements() {
+                var placements = [];
+                var existingRanks = new Set();
+                scoresTable.querySelectorAll('tbody tr').forEach(function(row){
+                    var stage = row.dataset.stage || '';
+                    var teamId = row.dataset.teamId || '0';
+                    var participantId = row.dataset.participantId || '0';
+                    var scoreTd = row.querySelector('.score-cell');
+                    var scoreInput = scoreTd ? scoreTd.querySelector('.score-editor-input') : null;
+                    var scoreValue = scoreInput ? scoreInput.value : (scoreTd ? scoreTd.dataset.original : '0');
+
+                    if (!stage) {
+                        var placeSelect = row.querySelector('.place-select');
+                        if (placeSelect) {
+                            stage = placeSelect.value + ' место';
+                        }
+                    }
+                    if (!teamId || teamId === '0') {
+                        var teamSelect = row.querySelector('.placement-team');
+                        if (teamSelect) {
+                            teamId = teamSelect.value || '0';
+                        }
+                    }
+                    if (!participantId || participantId === '0') {
+                        var partSelect = row.querySelector('.placement-participant');
+                        if (partSelect) {
+                            participantId = partSelect.value || '0';
+                        }
+                    }
+                    if (!scoreValue) {
+                        var inlineScore = row.querySelector('.score-input');
+                        if (inlineScore) {
+                            scoreValue = inlineScore.value;
+                        }
+                    }
+                    if (!stage) return;
+                    existingRanks.add(stage);
+                    placements.push({
+                        rank: parseInt(stage, 10) || 0,
+                        team_id: teamId && teamId !== '0' ? teamId : undefined,
+                        participant_id: participantId && participantId !== '0' ? participantId : undefined,
+                        points: scoreValue || 0,
+                    });
+                });
+                [1,2,3].forEach(function(rank){
+                    var stage = rank + ' место';
+                    if (!Array.from(existingRanks).includes(stage)) {
+                        placements.push({ rank: rank, points: 0 });
+                    }
+                });
+                return placements;
+            }
+
+            function savePlacements() {
+                var placements = collectPlacements();
+                console.log('TicTacToe save payload:', placements);
+                fetch('/admin/save_tictactoe_placements', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game_slug: 'tictactoe', placements: placements }),
+                })
+                .then(function(res){
+                    if (!res.ok) {
+                        return res.text().then(function(text){ throw new Error('HTTP ' + res.status + ': ' + text); });
+                    }
+                    return res.json();
+                })
+                .then(function(data){
+                    console.log('TicTacToe save response:', data);
+                    if (data && data.status === 'ok') {
+                        window.location.reload();
+                    } else {
+                        alert('Ошибка при сохранении мест: ' + (data && data.error ? data.error : 'неизвестная'));
+                    }
+                })
+                .catch(function(err){
+                    console.error(err);
+                    alert('Ошибка при сохранении мест: ' + err.message);
+                });
+            }
+
+            scoresTable.addEventListener('click', function(event) {
+                var deleteRowBtn = event.target.closest('.delete-row-btn');
+                if (deleteRowBtn && scoresTable.contains(deleteRowBtn)) {
+                    var row = deleteRowBtn.closest('tr');
+                    if (!row) return;
+                    row.remove();
+                    return;
+                }
+                var scoreTd = event.target.closest('.score-cell');
+                if (scoreTd && scoresTable.contains(scoreTd) && editMode) {
+                    makeScoreCellEditable(scoreTd);
+                }
+            });
+
+            editBtn.addEventListener('click', function(){ enableEditMode(); });
+            cancelBtn.addEventListener('click', function(){ disableEditMode(); });
+            saveBtn.addEventListener('click', function(){ savePlacements(); });
+
+            addRowBtn && addRowBtn.addEventListener('click', function(){
+                var tbody = scoresTable.querySelector('tbody');
+                if (!tbody) return;
+                editMode = true;
+                editBtn.style.display = 'none';
+                saveBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'inline-block';
+                var row = document.createElement('tr');
+                row.className = 'new-row';
+                row.innerHTML = '<td><select class="place-select" style="background:#2a2a2a; color:#fff; padding:6px; border:1px solid #555; border-radius:4px;">' +
+                    '<option value="1">1 место</option>' +
+                    '<option value="2">2 место</option>' +
+                    '<option value="3">3 место</option>' +
+                    '</select></td>' +
+                    '<td>' +
+                    '<select class="placement-participant" style="background:#2a2a2a; color:#fff; padding:6px; border:1px solid #555; border-radius:4px; margin-right:6px;">' + buildParticipantOptions(0) + '</select>' +
+                    '<select class="placement-team" style="background:#2a2a2a; color:#fff; padding:6px; border:1px solid #555; border-radius:4px;">' + buildTeamOptions(0) + '</select>' +
+                    '</td>' +
+                    '<td><input type="number" class="score-input" value="0" style="width:80px; padding:6px; border-radius:4px; border:1px solid #555; background:#2a2a2a; color:#fff;"></td>' +
+                    '<td><button class="save-inline" type="button" style="background:#28a745; color:#fff; padding:6px 10px; border:none; border-radius:4px; cursor:pointer; margin-right:6px;">Ok</button>' +
+                    '<button class="cancel-inline" type="button" style="background:#666; color:#fff; padding:6px 10px; border:none; border-radius:4px; cursor:pointer;">Отмена</button></td>';
+                tbody.appendChild(row);
+
+                row.querySelector('.save-inline').addEventListener('click', function(){
+                    var place = row.querySelector('.place-select').value;
+                    var participantVal = row.querySelector('.placement-participant').value;
+                    var teamVal = row.querySelector('.placement-team').value;
+                    var scoreVal = row.querySelector('.score-input').value;
+                    var participantObj = null;
+                    var teamObj = null;
+                    for (var i = 0; i < ALL_PARTICIPANTS.length; i++) {
+                        if (String(ALL_PARTICIPANTS[i].id) === participantVal) {
+                            participantObj = ALL_PARTICIPANTS[i];
+                            break;
+                        }
+                    }
+                    for (var j = 0; j < ALL_TEAMS.length; j++) {
+                        if (String(ALL_TEAMS[j].id) === teamVal) {
+                            teamObj = ALL_TEAMS[j];
+                            break;
+                        }
+                    }
+                    var displayName = '—';
+                    if (participantObj) {
+                        displayName = escapeHtml(participantObj.name);
+                        if (participantObj.team_name) {
+                            displayName += ' (' + escapeHtml(participantObj.team_name) + ')';
+                        }
+                    } else if (teamObj) {
+                        displayName = escapeHtml(teamObj.name);
+                    }
+                    var newRow = document.createElement('tr');
+                    newRow.dataset.stage = place + ' место';
+                    newRow.dataset.scoreId = '';
+                    newRow.dataset.teamId = teamVal || '0';
+                    newRow.dataset.participantId = participantVal || '0';
+                    newRow.innerHTML = '<td>' + place + '</td>' +
+                        '<td>' + displayName + '</td>' +
+                        '<td class="score-cell" data-original="' + scoreVal + '">' + scoreVal + '</td>' +
+                        '<td><button type="button" class="delete-row-btn" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>';
+                    row.replaceWith(newRow);
+                });
+                row.querySelector('.cancel-inline').addEventListener('click', function(){ row.remove(); });
+                editBtn.style.display = 'none';
+                saveBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'inline-block';
+                editMode = true;
+            });
+        })();
+    </script>
+
     {% endif %}
 
 {% if game.slug == 'monopoly' %}
