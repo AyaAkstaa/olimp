@@ -136,6 +136,29 @@
         color: var(--danger);
         text-decoration: none;
     }
+    .toggle-btn {
+        display: inline-flex;
+        padding: 12px 18px;
+        border: 2px solid rgba(230,0,122,0.7);
+        background: rgba(230, 0, 122, 0.1);
+        color: var(--danger);
+        text-decoration: none;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+    }
+    .toggle-btn:hover {
+        background: rgba(230, 0, 122, 0.25);
+        border-color: var(--danger);
+    }
+    .toggle-btn.active {
+        background: rgba(230, 0, 122, 0.95);
+        color: var(--black);
+        border-color: var(--danger);
+        font-weight: bold;
+    }
     
     @media (max-width: 980px) {
         .admin-grid { grid-template-columns: 1fr; }
@@ -148,7 +171,13 @@
             <h1>Админ-панель</h1>
             <p style="margin:0; color:#ccc;">Добавляйте команды, участников, матчи и прямо в таблице редактируйте результаты.</p>
         </div>
-        <a href="/schedule" class="link-pill">Открыть расписание</a>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <a href="/schedule" class="link-pill">Открыть расписание</a>
+            <a href="/results" class="link-pill">Посмотреть итоги</a>
+            <form action="/admin/toggle_podium" method="POST" style="display: inline;">
+                <button type="submit" class="toggle-btn {% if show_podium %}active{% endif %}">{% if show_podium %}✓ Подиум включен{% else %}☐ Подиум выключен{% endif %}</button>
+            </form>
+        </div>
     </div>
 
     <div class="admin-grid">

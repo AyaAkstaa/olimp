@@ -1,0 +1,593 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .results-container {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background-color: transparent; /* allow global/bg image to show through */
+        position: relative;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    /* background: keep a fixed full-viewport pseudo-layer behind content for parallax */
+    .results-container::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: url('/static/main/МакетГлавной_0013_Кровь.png');
+        background-size: 100% auto;
+        background-position: left top;
+        background-repeat: repeat-y;
+        pointer-events: none;
+        z-index: -3;
+        will-change: transform;
+        transform: translateY(var(--bg-scroll, 0px));
+    }
+
+    /* semi-transparent overlay layer above background but behind content */
+    .results-container::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.20));
+        pointer-events: none;
+        z-index: -2;
+    }
+
+    .results-monokuma {
+        position: fixed;
+        right: 0;
+        top: 80px;
+        width: 35%;
+        height: calc(100vh - 80px);
+        background-position: right center;
+        background-repeat: no-repeat;
+        background-size: contain;
+        pointer-events: none;
+        z-index: 1; /* sit above background overlay but behind main content */
+        opacity: 1;
+        display: block;
+        min-height: 60vh;
+    }
+
+    @media (max-width: 1400px) {
+        .results-monokuma {
+            width: 25%;
+            opacity: 0.5;
+        }
+    }
+
+    /* hide Monokuma only on small mobile screens */
+    @media (max-width: 900px) {
+        .results-monokuma {
+            display: none;
+        }
+    }
+
+    .results-content {
+        position: relative;
+        z-index: 1;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 24px 60px;
+        width: 100%;
+        margin-right: auto;
+    }
+
+    @media (min-width: 1201px) {
+        .results-content {
+            max-width: 60%;
+            margin-left: 0;
+            margin-right: auto;
+            padding-right: 40px;
+        }
+        /* layout monokuma to the right of content on wide screens */
+        .results-container {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+        .results-content { order: 1; flex: 0 0 65%; max-width: none; z-index: 2; }
+        .results-monokuma {
+            order: 2;
+            position: relative;
+            right: auto;
+            left: auto;
+            top: auto;
+            width: 40%;
+            height: auto;
+            align-self: flex-start;
+            opacity: 1;
+            z-index: 0;
+            pointer-events: none;
+            background-size: contain;
+            margin-top: 80px;
+            display: block;
+            flex: 0 0 35%;
+            min-height: 60vh;
+        }
+    }
+
+    .results-header {
+        margin-bottom: 30px;
+        text-align: center;
+    }
+
+    .results-title {
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        color: var(--white);
+        text-transform: uppercase;
+        line-height: 1.1;
+        text-shadow: 4px 4px 0px rgba(230, 0, 122, 0.45);
+        margin-bottom: 12px;
+        letter-spacing: 0.05em;
+    }
+
+    .results-subtitle {
+        color: rgba(230, 0, 122, 0.9);
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }
+
+    .results-tabs {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .tab-button {
+        padding: 10px 20px;
+        background: rgba(15, 15, 15, 0.85);
+        border: 2px solid rgba(230, 0, 122, 0.6);
+        color: var(--white);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: 'Russo One', sans-serif;
+        font-size: 0.9rem;
+    }
+
+    .tab-button:hover,
+    .tab-button.active {
+        background: rgba(230, 0, 122, 0.95);
+        color: var(--black);
+        border-color: var(--danger);
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .table-wrapper {
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(230, 0, 122, 0.18);
+        padding: 18px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+        backdrop-filter: blur(6px) saturate(120%);
+        border-radius: 12px;
+        transform: none;
+        position: relative;
+    }
+
+    .table-wrapper > * {
+        transform: skewX(2deg);
+    }
+
+    .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .results-table th {
+        background: linear-gradient(135deg, rgba(230, 0, 122, 0.95), rgba(230, 0, 122, 0.75));
+        color: var(--white);
+        padding: 14px 16px;
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.95rem;
+        border-bottom: 2px solid rgba(230, 0, 122, 0.4);
+    }
+
+    .results-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        color: #f5f5f5;
+        font-size: 0.95rem;
+    }
+
+    .results-table tbody tr:nth-child(odd) {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .results-table tbody tr:hover {
+        background: rgba(230, 0, 122, 0.12);
+        transition: background 0.2s ease;
+    }
+
+    .rank-column {
+        text-align: center;
+        width: 50px;
+        font-weight: bold;
+        color: var(--danger);
+        font-size: 1rem;
+    }
+
+    .team-name {
+        font-weight: bold;
+        color: var(--white);
+    }
+
+    .score-column {
+        text-align: center;
+        font-weight: bold;
+        color: rgba(230, 0, 122, 0.9);
+        font-size: 1rem;
+    }
+
+    .no-data {
+        text-align: center;
+        padding: 30px;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 1rem;
+    }
+
+    .medal-1 {
+        color: #FFD700;
+        text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+
+    .medal-2 {
+        color: #C0C0C0;
+        text-shadow: 0 0 8px rgba(192, 192, 192, 0.5);
+    }
+
+    .medal-3 {
+        color: #CD7F32;
+        text-shadow: 0 0 8px rgba(205, 127, 50, 0.5);
+    }
+
+    .top-teams {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .team-card {
+        background: rgba(15, 15, 15, 0.94);
+        border: 2px solid rgba(230, 0, 122, 0.6);
+        padding: 18px;
+        text-align: center;
+        transform: skewX(-2deg);
+        transition: all 0.3s ease;
+    }
+
+    .team-card > * {
+        transform: skewX(2deg);
+    }
+
+    .team-card:hover {
+        border-color: var(--danger);
+        box-shadow: 0 8px 24px rgba(230, 0, 122, 0.2);
+    }
+
+    .team-card.first {
+        border-color: #FFD700;
+        background: rgba(15, 15, 15, 0.96);
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+    }
+
+    .team-card.second {
+        border-color: #C0C0C0;
+        background: rgba(15, 15, 15, 0.96);
+        box-shadow: 0 0 20px rgba(192, 192, 192, 0.15);
+    }
+
+    .team-card.third {
+        border-color: #CD7F32;
+        background: rgba(15, 15, 15, 0.96);
+        box-shadow: 0 0 20px rgba(205, 127, 50, 0.15);
+    }
+
+    .card-rank {
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(230, 0, 122, 0.8);
+        margin-bottom: 6px;
+    }
+
+    .card-name {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: var(--white);
+        margin-bottom: 10px;
+        word-break: break-word;
+    }
+
+    .card-score {
+        font-size: 1.6rem;
+        color: var(--danger);
+        font-weight: bold;
+        text-shadow: 0 0 10px rgba(230, 0, 122, 0.3);
+    }
+
+    .info-box {
+        background: rgba(230, 0, 122, 0.08);
+        border: 1px solid rgba(230, 0, 122, 0.3);
+        padding: 12px;
+        margin-bottom: 20px;
+        color: #ddd;
+        text-align: center;
+        font-size: 0.9rem;
+    }
+
+    /* Podium styles (compact, fits next to Monokuma) */
+    .podium-wrapper { display:flex; justify-content:center; margin-bottom:18px; }
+    .podium { display:flex; align-items:flex-end; gap:18px; position:relative; }
+    /* subtle spotlight behind the podium */
+    .podium::before { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: -10px; width: 640px; height: 220px; background: radial-gradient(closest-side, rgba(230,0,122,0.06), rgba(0,0,0,0.0)); filter: blur(24px); z-index: -1; }
+    .podium-step { width:160px; border-radius:12px 12px 8px 8px; padding:18px 12px 10px; box-sizing:border-box; position:relative; text-align:center; overflow:visible; display:flex; flex-direction:column; justify-content:flex-start; align-items:center; }
+    /* remove manual vertical offsets so bottoms align by default */
+    .podium-step.first { height:260px; box-shadow: 0 22px 54px rgba(0,0,0,0.7); background: linear-gradient(180deg, #fff8d6 0%, #ffe26a 28%, #ffd700 60%); border: 2px solid rgba(255,215,0,0.18); }
+    .podium-step.second { height:200px; background: linear-gradient(180deg, #ffffff 0%, #e6e6e6 30%, #cfcfcf 60%); border: 2px solid rgba(200,200,200,0.12); box-shadow: 0 16px 36px rgba(0,0,0,0.52); }
+    .podium-step.third { height:160px; background: linear-gradient(180deg, #fff6eb 0%, #e6cfae 30%, #b8793f 60%); border: 2px solid rgba(180,120,60,0.12); box-shadow: 0 12px 28px rgba(0,0,0,0.42); }
+    .podium-step .step-rank { font-size:0.95rem; color: rgba(30,30,30,0.95); margin-bottom:6px; font-weight:700; }
+    .podium-step .step-name {
+        font-weight:900;
+        font-size:1rem;
+        text-transform:uppercase;
+        letter-spacing:0.08em;
+        margin: 17px 0 4px 0;
+        background: linear-gradient(90deg, rgb(49, 40, 7), rgb(22, 14, 2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow: 0 10px 30px rgba(0,0,0,0.55);
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+    .podium-step .step-score {
+        margin-top:6px;
+        font-size:1.36rem;
+        color: rgba(20,20,20,0.95);
+        font-weight:900;
+        background: linear-gradient(90deg, rgba(230,0,122,0.95), rgba(200,0,100,0.9));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow: 0 8px 20px rgba(230,0,122,0.08);
+    }
+    /* decorative top ribbon / metallic stripe (kept behind content) */
+    .podium { position: relative; }
+    .podium-step { position: relative; z-index: 2; }
+    .podium-step > * { position: relative; z-index: 3; }
+    /* removed decorative ::before stripe to reduce clutter */
+
+    /* large faint rank number behind each step */
+    .podium-step::after {
+        content: attr(data-rank);
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-weight: 900;
+        font-size: calc(4.4rem + 2vw);
+        color: rgba(255,255,255,0.04);
+        letter-spacing: -0.02em;
+        pointer-events: none;
+        z-index: 0;
+        line-height: 1;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.35);
+    }
+    .podium-step.first::after { color: rgba(255,215,0,0.08); }
+    .podium-step.second::after { color: rgba(192,192,192,0.08); }
+    .podium-step.third::after { color: rgba(205,127,50,0.08); }
+
+    /* softer, wider spotlight behind the whole podium */
+    .podium::before { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: -30px; width: 900px; height: 340px; background: radial-gradient(closest-side, rgba(230,0,122,0.10), rgba(0,0,0,0.00)); filter: blur(36px); z-index: 0; }
+    /* medal badge */
+    .podium-step .medal { position: absolute; top: -22px; right: 12px; width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#111; font-weight:900; box-shadow: 0 8px 26px rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.06); }
+    .podium-step.first .medal { background: radial-gradient(circle at 30% 30%, #fffdf0, #ffd700); }
+    .podium-step.second .medal { background: radial-gradient(circle at 30% 30%, #fafafa, #c0c0c0); }
+    .podium-step.third .medal { background: radial-gradient(circle at 30% 30%, #fff6ed, #cd7f32); }
+    .podium-step .medal::after { content: ''; position:absolute; left:50%; transform:translateX(-50%); bottom:-10px; width:10px; height:18px; background: linear-gradient(180deg, rgba(0,0,0,0.06), rgba(0,0,0,0.0)); border-radius:2px; }
+    .podium-base { position: absolute; left: 50%; transform: translateX(-50%); bottom: -46px; width: 560px; height: 46px; background: linear-gradient(180deg, #111 0%, #070707 60%); border-radius: 12px; box-shadow: 0 22px 60px rgba(0,0,0,0.75); border: 2px solid rgba(255,255,255,0.03); }
+
+    /* subtle vertical separators to emphasize steps */
+    .podium-step + .podium-step { margin-left: 0; }
+
+    /* Elements that can show participants; tooltip is rendered by JS to avoid duplicate CSS pseudo-tooltips */
+    .team-name[data-participants], .step-name[data-participants] { position: relative; cursor: default; }
+
+    @media (max-width: 768px) {
+        .results-content {
+            padding: 30px 16px 40px;
+        }
+
+        .table-wrapper {
+            padding: 14px;
+            transform: skewX(0deg);
+        }
+
+        .table-wrapper > * {
+            transform: skewX(0deg);
+        }
+
+        .team-card {
+            transform: skewX(0deg);
+        }
+
+        .team-card > * {
+            transform: skewX(0deg);
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 10px 8px;
+        }
+
+        .results-tabs {
+            gap: 8px;
+        }
+
+        .tab-button {
+            padding: 8px 14px;
+            font-size: 0.8rem;
+        }
+    }
+</style>
+
+<div class="results-container">
+    <div class="results-monokuma" id="monokuma-space"><img id="monokuma-img" src="/static/monokuma.png" alt="Monokuma" style="width:100%;height:auto;display:block;pointer-events:none;opacity:1;"/></div>
+    <div class="results-content">
+        <div class="results-header">
+            <h1 class="results-title">Финальные Итоги</h1>
+            <p class="results-subtitle">Таблица результатов олимпиады</p>
+            <br>
+        </div>
+
+        {% if show_podium and team_totals %}
+        <div class="podium-wrapper">
+            <div class="podium">
+                {% set top = team_totals[:3] %}
+                <div class="podium-step second" data-rank="2">
+                    {% if top|length > 1 %}
+                        <div class="medal">2</div>
+                        <div class="step-name" data-participants="{{ team_participants.get(top[1].team_name, '') }}">{{ top[1].team_name }}</div>
+                        <div class="step-score">{{ top[1].total }}</div>
+                    {% endif %}
+                </div>
+                <div class="podium-step first" data-rank="1">
+                    {% if top|length > 0 %}
+                        <div class="medal">1</div>
+                        <div class="step-name" data-participants="{{ team_participants.get(top[0].team_name, '') }}">{{ top[0].team_name }}</div>
+                        <div class="step-score">{{ top[0].total }}</div>
+                    {% endif %}
+                </div>
+                <div class="podium-step third" data-rank="3">
+                    {% if top|length > 2 %}
+                        <div class="medal">3</div>
+                        <div class="step-name" data-participants="{{ team_participants.get(top[2].team_name, '') }}">{{ top[2].team_name }}</div>
+                        <div class="step-score">{{ top[2].total }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="results-tabs">
+            <button class="tab-button active" onclick="switchTab('teams')">Команды</button>
+            <button class="tab-button" onclick="switchTab('participants')">Участники</button>
+        </div>
+
+        <!-- Teams Tab -->
+        <div id="teams" class="tab-content active">
+            <div class="table-wrapper">
+                {% if team_totals %}
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th class="rank-column">Ме</th>
+                            <th>Команда</th>
+                            <th class="score-column">Очки</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in team_totals %}
+                        <tr>
+                            <td class="rank-column {% if loop.index0 == 0 %}medal-1{% elif loop.index0 == 1 %}medal-2{% elif loop.index0 == 2 %}medal-3{% endif %}">
+                                {{ loop.index }}
+                            </td>
+                            <td class="team-name" data-participants="{{ team_participants.get(team.team_name, '') }}">{{ team.team_name }}</td>
+                            <td class="score-column">{{ team.total }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="no-data">
+                    Результатов команд пока нет. Они появятся после внесения результатов в админку.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Participants Tab -->
+        <div id="participants" class="tab-content">
+            <div class="table-wrapper">
+                {% if participant_totals %}
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th class="rank-column">Ме</th>
+                            <th>Участник</th>
+                            <th>Команда</th>
+                            <th class="score-column">Очки</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in participant_totals %}
+                        <tr>
+                            <td class="rank-column {% if loop.index0 == 0 %}medal-1{% elif loop.index0 == 1 %}medal-2{% elif loop.index0 == 2 %}medal-3{% endif %}">
+                                {{ loop.index }}
+                            </td>
+                            <td>{{ row.participant_name }}</td>
+                            <td class="team-name" data-participants="{{ team_participants.get(row.team_name, '') }}">{{ row.team_name }}</td>
+                            <td class="score-column">{{ row.total }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="no-data">
+                    Индивидуальных результатов пока нет. Они появятся после внесения результатов в админку.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchTab(tabName) {
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => tab.classList.remove('active'));
+
+        // Remove active class from all buttons
+        const buttons = document.querySelectorAll('.tab-button');
+        buttons.forEach(btn => btn.classList.remove('active'));
+
+        // Show selected tab
+        document.getElementById(tabName).classList.add('active');
+
+        // Add active class to clicked button
+        event.target.classList.add('active');
+    }
+
+    // Parallax effect for background
+    window.addEventListener('scroll', () => {
+        const scrolled = window.pageYOffset;
+        const bg = document.querySelector('.results-container::before');
+        if (document.querySelector('.results-container::before')) {
+            document.querySelector('.results-container').style.setProperty('--bg-scroll', scrolled * 0.5 + 'px');
+        }
+    });
+
+    // Background image for Monokuma is set inline on #monokuma-space.
+</script>
+
+{% endblock %}

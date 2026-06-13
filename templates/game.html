@@ -23,8 +23,9 @@
         /* Даем запас по высоте (20% от экрана), чтобы при прокрутке снизу не оголялся черный фон */
         height: 130vh; 
         background-image: url('/static/main/МакетГлавной_0013_Кровь.png');
-        background-size: cover;
-        background-position: center top;
+        background-size: 100% auto;
+        background-position: left top;
+        background-repeat: repeat-y;
         pointer-events: none;
         z-index: -2; /* Уводим в самый низ */
         
@@ -244,7 +245,7 @@
                 {% for result in scores %}
                 <tr data-score-id="{{ result.id }}">
                     {% if game.slug == 'geoguessr' %}
-                        <td>{{ result.team.name if result.team else '—' }}</td>
+                        <td class="team-name" data-participants="{{ team_participants.get(result.team.name, '') if result.team else '' }}">{{ result.team.name if result.team else '—' }}</td>
                         <td>{{ result.participant.name if result.participant else '—' }}</td>
                         <td class="score-cell" data-original="{{ result.score }}">{{ result.score }}</td>
                         {% if is_admin %}
@@ -253,11 +254,13 @@
                     {% else %}
                         <td>{{ result.stage or 'Общий' }}</td>
                         <td>
-                            {% if result.team %}{{ result.team.name }}{% endif %}
                             {% if result.participant %}
                                 {{ result.participant.name }}{% if result.team %} ({{ result.team.name }}){% endif %}
+                            {% elif result.team %}
+                                {{ result.team.name }}
+                            {% else %}
+                                Результат без привязки
                             {% endif %}
-                            {% if not result.team and not result.participant %}Результат без привязки{% endif %}
                         </td>
                         <td>{{ result.score }}</td>
                         <td>{{ result.notes or '—' }}</td>
@@ -312,7 +315,7 @@
                 {% if totals.data %}
                     {% for team_name, points in totals.data.items() %}
                     <tr>
-                        <td>{{ team_name }}</td>
+                        <td class="team-name" data-participants="{{ team_participants.get(team_name, '') }}">{{ team_name }}</td>
                         <td>{{ points }}</td>
                     </tr>
                     {% endfor %}
@@ -345,7 +348,7 @@
         <tbody>
             {% if bingo.data %}
                 {% for team_name, points in bingo.data.items() %}
-                <tr data-team-name="{{ team_name }}"><td>{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
+                <tr data-team-name="{{ team_name }}"><td class="team-name" data-participants="{{ team_participants.get(team_name, '') }}">{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
                 {% endfor %}
             {% else %}
                 <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет результатов для Бинго.</td></tr>
@@ -371,7 +374,7 @@
         <tbody>
             {% if bed.data %}
                 {% for team_name, points in bed.data.items() %}
-                <tr data-team-name="{{ team_name }}"><td>{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
+                <tr data-team-name="{{ team_name }}"><td class="team-name" data-participants="{{ team_participants.get(team_name, '') }}">{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
                 {% endfor %}
             {% else %}
                 <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет результатов для Бедварс.</td></tr>
@@ -398,7 +401,7 @@
         <tbody>
             {% if summary.data %}
                 {% for team_name, points in summary.data.items() %}
-                <tr data-team-name="{{ team_name }}"><td>{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
+                <tr data-team-name="{{ team_name }}"><td class="team-name" data-participants="{{ team_participants.get(team_name, '') }}">{{ team_name }}</td><td class="score-cell">{{ points }}</td></tr>
                 {% endfor %}
             {% else %}
                 <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет командных результатов для отображения.</td></tr>
@@ -924,7 +927,7 @@
             {% if quiz_data.teams %}
                 {% for team_name, team_info in quiz_data.teams.items() %}
                 <tr data-score-id="{{ team_info.id }}" data-team-name="{{ team_name }}">
-                    <td>{{ team_name }}</td>
+                    <td class="team-name" data-participants="{{ team_participants.get(team_name, '') }}">{{ team_name }}</td>
                     <td class="score-cell" data-original="{{ team_info.score }}">{{ team_info.score }}</td>
                     {% if is_admin %}
                     <td><button type="button" class="delete-row-btn" data-score-id="{{ team_info.id }}" style="background:#c62828;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;">Удалить</button></td>

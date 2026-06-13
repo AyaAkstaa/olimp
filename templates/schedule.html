@@ -75,55 +75,13 @@
     }
 </style>
 
-<div class="hero-row">
-    <div class="hero-card">
-        <h2>Общее расписание</h2>
-        <p>Просматривайте расписание всех матчей и таблиц по каждой игре. В админке можно добавлять этапы для Геогессера, Майнкрафта, Монополии, Квиза и Крестиков-ноликов.</p>
-        <a href="/register" class="register-link">Заявить команду</a>
-    </div>
-    <div class="hero-card">
-        <h2>Общая итоговая таблица</h2>
-        <table class="summary-table">
-            <thead>
-                <tr><th>Команда</th><th>Очки</th></tr>
-            </thead>
-            <tbody>
-                {% if team_totals %}
-                    {% for team in team_totals %}
-                    <tr>
-                        <td>{{ team.team_name }}</td>
-                        <td>{{ team.total }}</td>
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr><td colspan="2" style="text-align:center; color:#ddd;">Нет данных для команд.</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
-</div>
 
 <div class="hero-card">
-    <h2>Индивидуальные результаты</h2>
-    <table class="summary-table">
-        <thead>
-            <tr><th>Участник</th><th>Команда</th><th>Очки</th></tr>
-        </thead>
-        <tbody>
-            {% if participant_totals %}
-                {% for row in participant_totals %}
-                <tr>
-                    <td>{{ row.participant_name }}</td>
-                    <td>{{ row.team_name }}</td>
-                    <td>{{ row.total }}</td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr><td colspan="3" style="text-align:center; color:#ddd;">Нет индивидуальных результатов.</td></tr>
-            {% endif %}
-        </tbody>
-    </table>
+    <h2>Общее расписание</h2>
+    <p>Просматривайте расписание всех матчей и таблиц по каждой игре. В админке можно добавлять этапы для Геогессера, Майнкрафта, Монополии, Квиза и Крестиков-ноликов.</p>
+    <a href="/register" class="register-link">Заявить команду</a>
 </div>
+
 
 <div class="hero-card schedule-block">
     <h2>Расписание по играм</h2>
