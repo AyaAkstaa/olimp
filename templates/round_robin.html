@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{title}</title>
+  <title>{{ title }}</title>
   <style>
     body {{ font-family: Arial, Helvetica, sans-serif; padding:16px; color:#222 }}
     .wrap {{ max-width:1000px; margin:0 auto }}
@@ -29,54 +29,35 @@
     <thead>
       <tr>
         <th></th>
-        <th class="player-col">Игрок 1</th>
-        <th class="player-col">Игрок 2</th>
-        <th class="player-col">Игрок 3</th>
-        <th class="player-col">Игрок 4</th>
-        <th class="player-col">Игрок 5</th>
+        {% if players %}
+            {% for p in players %}
+                <th class="player-col">{{ p }}</th>
+            {% endfor %}
+        {% else %}
+            <th class="player-col">Игрок 1</th>
+            <th class="player-col">Игрок 2</th>
+            <th class="player-col">Игрок 3</th>
+            <th class="player-col">Игрок 4</th>
+            <th class="player-col">Игрок 5</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
+      {% set n = players|length if players else 5 %}
+      {% for i in range(n) %}
       <tr>
-        <th class="player-col">Игрок 1</th>
-        <td style="background:#f9f9f9">—</td>
-        <td><input class="score" id="m_0_1_a" data-i="0" data-j="1" type="number" min=0 value=""> — <input class="score" id="m_0_1_b" data-i="0" data-j="1" type="number" min=0 value=""></td>
-        <td><input class="score" id="m_0_2_a" data-i="0" data-j="2" type="number" min=0 value=""> — <input class="score" id="m_0_2_b" data-i="0" data-j="2" type="number" min=0 value=""></td>
-        <td><input class="score" id="m_0_3_a" data-i="0" data-j="3" type="number" min=0 value=""> — <input class="score" id="m_0_3_b" data-i="0" data-j="3" type="number" min=0 value=""></td>
-        <td><input class="score" id="m_0_4_a" data-i="0" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_0_4_b" data-i="0" data-j="4" type="number" min=0 value=""></td>
+        <th class="player-col">{% if players %}{{ players[i] }}{% else %}Игрок {{ i+1 }}{% endif %}</th>
+        {% for j in range(n) %}
+            {% if i == j %}
+                <td style="background:#f9f9f9">—</td>
+            {% elif j < i %}
+                <td class="muted">(см. выше)</td>
+            {% else %}
+                <td><input class="score" id="m_{{ i }}_{{ j }}_a" data-i="{{ i }}" data-j="{{ j }}" type="number" min=0 value=""> — <input class="score" id="m_{{ i }}_{{ j }}_b" data-i="{{ i }}" data-j="{{ j }}" type="number" min=0 value=""></td>
+            {% endif %}
+        {% endfor %}
       </tr>
-      <tr>
-        <th class="player-col">Игрок 2</th>
-        <td class="muted">(см. выше)</td>
-        <td style="background:#f9f9f9">—</td>
-        <td><input class="score" id="m_1_2_a" data-i="1" data-j="2" type="number" min=0 value=""> — <input class="score" id="m_1_2_b" data-i="1" data-j="2" type="number" min=0 value=""></td>
-        <td><input class="score" id="m_1_3_a" data-i="1" data-j="3" type="number" min=0 value=""> — <input class="score" id="m_1_3_b" data-i="1" data-j="3" type="number" min=0 value=""></td>
-        <td><input class="score" id="m_1_4_a" data-i="1" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_1_4_b" data-i="1" data-j="4" type="number" min=0 value=""></td>
-      </tr>
-      <tr>
-        <th class="player-col">Игрок 3</th>
-        <td class="muted">(см. выше)</td>
-        <td class="muted">(см. выше)</td>
-        <td style="background:#f9f9f9">—</td>
-        <td><input class="score" id="m_2_3_a" data-i="2" data-j="3" type="number" min=0 value=""> — <input class="score" id="m_2_3_b" data-i="2" data-j="3" type="number" min=0 value=""></td>
-        <td><input class="score" id="m_2_4_a" data-i="2" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_2_4_b" data-i="2" data-j="4" type="number" min=0 value=""></td>
-      </tr>
-      <tr>
-        <th class="player-col">Игрок 4</th>
-        <td class="muted">(см. выше)</td>
-        <td class="muted">(см. выше)</td>
-        <td class="muted">(см. выше)</td>
-        <td style="background:#f9f9f9">—</td>
-        <td><input class="score" id="m_3_4_a" data-i="3" data-j="4" type="number" min=0 value=""> — <input class="score" id="m_3_4_b" data-i="3" data-j="4" type="number" min=0 value=""></td>
-      </tr>
-      <tr>
-        <th class="player-col">Игрок 5</th>
-        <td class="muted">(см. выше)</td>
-        <td class="muted">(см. выше)</td>
-        <td class="muted">(см. выше)</td>
-        <td class="muted">(см. выше)</td>
-        <td style="background:#f9f9f9">—</td>
-      </tr>
+      {% endfor %}
     </tbody>
   </table>
 
@@ -94,57 +75,24 @@
       </tr>
     </thead>
     <tbody>
-      <tr data-player="0">
-        <td class="pos">1</td>
-        <td class="player-col">Игрок 1</td>
+      {% set n = players|length if players else 5 %}
+      {% for i in range(n) %}
+      <tr data-player="{{ i }}">
+        <td class="pos">{{ i+1 }}</td>
+        <td class="player-col">{% if players %}{{ players[i] }}{% else %}Игрок {{ i+1 }}{% endif %}</td>
         <td class="played">0</td>
         <td class="wins">0</td>
         <td class="draws">0</td>
         <td class="losses">0</td>
         <td class="points">0</td>
       </tr>
-      <tr data-player="1">
-        <td class="pos">2</td>
-        <td class="player-col">Игрок 2</td>
-        <td class="played">0</td>
-        <td class="wins">0</td>
-        <td class="draws">0</td>
-        <td class="losses">0</td>
-        <td class="points">0</td>
-      </tr>
-      <tr data-player="2">
-        <td class="pos">3</td>
-        <td class="player-col">Игрок 3</td>
-        <td class="played">0</td>
-        <td class="wins">0</td>
-        <td class="draws">0</td>
-        <td class="losses">0</td>
-        <td class="points">0</td>
-      </tr>
-      <tr data-player="3">
-        <td class="pos">4</td>
-        <td class="player-col">Игрок 4</td>
-        <td class="played">0</td>
-        <td class="wins">0</td>
-        <td class="draws">0</td>
-        <td class="losses">0</td>
-        <td class="points">0</td>
-      </tr>
-      <tr data-player="4">
-        <td class="pos">5</td>
-        <td class="player-col">Игрок 5</td>
-        <td class="played">0</td>
-        <td class="wins">0</td>
-        <td class="draws">0</td>
-        <td class="losses">0</td>
-        <td class="points">0</td>
-      </tr>
+      {% endfor %}
     </tbody>
   </table>
 
 
   <script>
-    const players = ["Игрок 1","Игрок 2","Игрок 3","Игрок 4","Игрок 5"];
+    const players = {{ players|tojson if players is defined else '["Игрок 1","Игрок 2","Игрок 3","Игрок 4","Игрок 5"]' }};
     const pts_win = 3;
     const pts_draw = 1;
     const pts_loss = 0;

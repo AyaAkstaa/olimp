@@ -9,7 +9,8 @@
         :root {
             --pink: #E6007A;
             --white: #f5f5f5;
-            --black: #090909;
+{% set is_blood = (request.url.path.startswith('/game') if request.url.path is defined else False) or request.url.path == '/results' or request.url.path == '/schedule' %}
+<body class="{% if request.url.path == '/' %}no-scroll{% endif %}{% if is_blood %} blood-bg{% endif %}" {% if is_blood %}style="background-image: url('/static/main/МакетГлавной_0013_Кровь.png'); background-size: 100% auto; background-position: left top; background-attachment: fixed; background-repeat: repeat-y;"{% endif %}>
             --dark-gray: #121212;
             --gray: #222;
             --danger: #ff2d7b;
@@ -24,9 +25,18 @@
             color: var(--white);
             overflow: auto;
             -webkit-overflow-scrolling: touch;
+            height: 100%;
         }
         body {
             background: #0a0a0a;
+        }
+        /* apply full-viewport blood background when body has class `blood-bg` */
+        .blood-bg, html .blood-bg {
+            background-image: url('/static/main/МакетГлавной_0013_Кровь.png');
+            background-size: cover;
+            background-position: center top;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
         }
         ::selection {
             background: var(--danger);
@@ -160,9 +170,27 @@
             .nav-links { justify-content: center; }
         }
         html.no-scroll, body.no-scroll { overflow: hidden; height: 100vh; }
+        /* Elements that can show participants; tooltip is rendered by JS to avoid duplicate CSS pseudo-tooltips */
+        .team-name[data-participants], .step-name[data-participants] { position: relative; cursor: default; }
+        /* Floating JS tooltip (used when CSS pseudo-tooltip mispositions) */
+        .float-tooltip {
+            position: fixed;
+            z-index: 10050;
+            background: rgba(10,10,10,0.96);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            max-width: 360px;
+            font-size: 0.9rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.12s ease;
+            word-break: break-word;
+        }
     </style>
 </head>
-<body class="{% if request.url.path == '/' %}no-scroll{% endif %}">
+<body class="{% if request.url.path == '/' %}no-scroll{% endif %}{% if request.url.path.startswith('/game') or request.url.path == '/results' or request.url.path == '/schedule' %} blood-bg{% endif %}">
 
     <nav class="navbar">
         <div class="nav-brand">
@@ -172,7 +200,7 @@
         <div class="nav-links">
             <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Главная</a>
             <a href="/schedule" class="nav-link {% if request.url.path == '/schedule' %}active{% endif %}">Расписание</a>
-            <a href="/olympiad" class="nav-link {% if request.url.path.startswith('/olympiad') %}active{% endif %}">Олимпиада</a>
+            <a href="/results" class="nav-link {% if request.url.path == '/results' %}active{% endif %}">Итоги</a>
             <a href="/admin" class="nav-link {% if request.url.path == '/admin' %}active{% endif %}">Админ</a>
         </div>
         <a href="/register" class="auth-btn"><span>Регистрация</span></a>
@@ -181,6 +209,59 @@
     <div class="{% if request.url.path not in ['/', '/olympiad'] %}container{% endif %}">
         {% block content %}{% endblock %}
     </div>
+
+<script>
+// Global floating tooltip for elements with `data-participants`
+(function(){
+    let tooltip = document.createElement('div');
+    tooltip.className = 'float-tooltip';
+    document.body.appendChild(tooltip);
+    let visible = false;
+
+    function show(el){
+        const content = el.getAttribute('data-participants');
+        if(!content) return;
+        tooltip.textContent = content;
+        tooltip.style.opacity = '1';
+        visible = true;
+        // initial placement
+        const rect = el.getBoundingClientRect();
+        const tw = tooltip.offsetWidth || 240;
+        const th = tooltip.offsetHeight || 28;
+        let top = rect.top - th - 8;
+        let left = rect.left + rect.width/2 - tw/2;
+        if(top < 8) top = rect.bottom + 8;
+        if(left < 8) left = 8;
+        if(left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+    }
+
+    function hide(){ tooltip.style.opacity = '0'; visible = false; }
+
+    document.addEventListener('mouseover', e=>{
+        const el = e.target.closest('[data-participants]');
+        if(el) show(el);
+    });
+
+    document.addEventListener('mousemove', e=>{
+        if(!visible) return;
+        const tw = tooltip.offsetWidth;
+        let left = e.clientX - tw/2;
+        if(left < 8) left = 8;
+        if(left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+        let top = e.clientY + 18;
+        if(top + tooltip.offsetHeight > window.innerHeight - 8) top = e.clientY - tooltip.offsetHeight - 18;
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+    });
+
+    document.addEventListener('mouseout', e=>{
+        const el = e.target.closest('[data-participants]');
+        if(el) hide();
+    });
+})();
+</script>
 
 </body>
 </html>

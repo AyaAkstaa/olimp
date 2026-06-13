@@ -262,6 +262,9 @@ def schedule_page(request: Request, db: Session = Depends(get_db)):
         .order_by(desc("total"))
         .all()
     )
+    # build mapping for tooltips
+    teams_all = db.query(Team).all()
+    team_participants = {t.name: ', '.join([p.name for p in t.participants]) for t in teams_all}
     return render_template(
         "schedule.html",
         request=request,
@@ -269,7 +272,67 @@ def schedule_page(request: Request, db: Session = Depends(get_db)):
         schedule_items=schedule_items,
         team_totals=team_totals,
         participant_totals=participant_totals,
+        team_participants=team_participants,
     )
+
+
+@app.get("/results", response_class=HTMLResponse)
+def results_page(request: Request, db: Session = Depends(get_db)):
+    team_totals = (
+        db.query(
+            Team.name.label("team_name"),
+            func.coalesce(func.sum(Score.score), 0).label("total"),
+        )
+        .outerjoin(Score)
+        .group_by(Team.id, Team.name)
+        .order_by(desc("total"))
+        .all()
+    )
+    participant_totals = (
+        db.query(
+            Participant.name.label("participant_name"),
+            Team.name.label("team_name"),
+            func.coalesce(func.sum(Score.score), 0).label("total"),
+        )
+        .select_from(Participant)
+        .join(Team, Participant.team_id == Team.id)
+        .outerjoin(Score, Score.participant_id == Participant.id)
+        .group_by(Participant.id, Participant.name, Team.name)
+        .order_by(desc("total"))
+        .all()
+    )
+    # Get show_podium setting
+    show_podium_setting = db.query(Settings).filter(Settings.key == "show_podium").first()
+    show_podium = show_podium_setting.value == "1" if show_podium_setting else True
+    # build mapping of team name -> comma-separated participants for tooltips
+    teams = db.query(Team).all()
+    team_participants = {t.name: ', '.join([p.name for p in t.participants]) for t in teams}
+    return render_template(
+        "results.html",
+        request=request,
+        team_totals=team_totals,
+        participant_totals=participant_totals,
+        show_podium=show_podium,
+        team_participants=team_participants,
+    )
+
+
+@app.post("/admin/toggle_podium")
+def toggle_podium(request: Request, db: Session = Depends(get_db)):
+    # Verify admin
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
+    setting = db.query(Settings).filter(Settings.key == "show_podium").first()
+    if not setting:
+        setting = Settings(key="show_podium", value="1")
+        db.add(setting)
+    else:
+        setting.value = "0" if setting.value == "1" else "1"
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.get("/register", response_class=HTMLResponse)
@@ -325,6 +388,8 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
     # pass teams/participants for in-page editor and mark admin status
     teams = db.query(Team).order_by(Team.name).all()
     participants = db.query(Participant).order_by(Participant.name).all()
+    # build mapping for tooltips
+    team_participants = {t.name: ', '.join([p.name for p in t.participants]) for t in teams}
     tictactoe_image = db.query(GameImage).filter(GameImage.game_id == game.id).first()
     tictactoe_image_url = f"/static/{tictactoe_image.image_path}" if tictactoe_image and tictactoe_image.image_path else None
     tictactoe_placements = {}
@@ -345,8 +410,6 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
         teams=teams,
         participants=participants,
         is_admin=is_admin,
-        tictactoe_image_url=tictactoe_image_url,
-        tictactoe_placements=tictactoe_placements,
     )
 
 
@@ -368,6 +431,9 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     stages = [s[0] for s in stages_q if s[0] and s[0].strip().lower() not in ('круговик',)]
     match_titles = []
     user = cookie_user
+    # Get show_podium setting
+    show_podium_setting = db.query(Settings).filter(Settings.key == "show_podium").first()
+    show_podium = show_podium_setting.value == "1" if show_podium_setting else True
     return render_template(
         "admin.html",
         request=request,
@@ -379,6 +445,7 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         stages=stages,
         match_titles=match_titles,
         user=user,
+        show_podium=show_podium,
     )
 
 
