@@ -13,7 +13,7 @@
         overflow-x: hidden; 
     }
 
-    /* Наш живой параллакс-фон */
+
     body::before {
         content: '';
         position: fixed; /* Фиксируем на экране */
@@ -131,7 +131,6 @@
 
 
 <div class="game-header">
-    <div class="game-subtitle">Игра в центре внимания</div>
     <h1 class="title-splash">{{ game.name }}</h1>
     <div class="dangan-box" style="padding: 24px;">
         <p class="game-description">{{ game.description }}</p>
@@ -139,12 +138,12 @@
 </div>
 
 <div class="dangan-box" style="border-color: rgba(230,0,122,0.85);">
-    <h2 style="color: var(--danger); margin-top: 0;">Расписание турнира</h2>
+    <h2 style="color: var(--danger); margin-top: 0;">Расписание</h2>
     {% if schedule_items %}
     <div class="schedule-list">
         {% for item in schedule_items %}
         <div class="schedule-item">
-            <div class="schedule-time">{{ item.time }}</div>
+            <div class="schedule-time">{{ item.date.split('-')|reverse|join('.') }} {{ item.time }}</div>
             <div class="schedule-title">{{ item.title }}</div>
             <div class="schedule-desc">{{ item.description or '—' }}</div>
         </div>
@@ -157,7 +156,7 @@
 
 {% if game.slug == 'tictactoe' %}
 <div class="dangan-box" style="margin-top:18px; border-color: rgba(230,0,122,0.85);">
-    <h2 style="color: var(--danger); margin-top: 0;">Результаты</h2>
+    <h2 style="color: var(--danger); margin-top: 0;">Сетка</h2>
 
     {% if tictactoe_image_url %}
     <div style="text-align:center; margin-top:18px;">
@@ -182,6 +181,7 @@
     </div>
     {% endif %}
 
+    {% if false %}
     <table class="leaderboard" id="tictactoe-table" style="margin-top:24px;">
         <thead>
             <tr>
@@ -218,6 +218,7 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -689,8 +690,6 @@
             var scoresTable = document.getElementById('tictactoe-table');
             var editMode = false;
 
-            if (!editBtn || !scoresTable) return;
-
             var ALL_TEAMS = [
                 {% for t in teams %}
                 { id: {{ t.id }}, name: {{ t.name | tojson }} }{% if not loop.last %},{% endif %}
@@ -810,6 +809,9 @@
                 });
                 return html;
             }
+
+            // Table editing code - only run if scoresTable exists
+            if (scoresTable && editBtn) {
 
             function makeScoreCellEditable(td) {
                 if (!td || td.querySelector('.score-editor-input')) return;
@@ -1035,6 +1037,7 @@
                 cancelBtn.style.display = 'inline-block';
                 editMode = true;
             });
+            } // end if (scoresTable && editBtn)
         })();
     </script>
 
@@ -1321,11 +1324,11 @@
 
 {% endif %}
 
-{% if game.slug == 'quiz' %}
+{% if game.slug in ['quiz','tictactoe'] %}
 <div class="dangan-box" style="border-color: rgba(230,0,122,0.85); margin-top: 24px;">
     <h2 style="color: var(--danger); margin-top: 0;">Результаты</h2>
     
-    {% if is_admin and game.slug == 'quiz' %}
+    {% if is_admin and game.slug in ['quiz','tictactoe'] %}
     <div style="margin-bottom: 16px;">
         <button id="quizEditTableBtn" type="button" style="background:#e60078; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Редактировать</button>
         <button id="quizSaveTableBtn" type="button" style="display:none; background:#28a745; padding:10px 20px; border:none; color:#fff; cursor:pointer; border-radius:4px; font-weight:700; margin-right:8px;">Сохранить</button>
@@ -1371,7 +1374,7 @@
     </table>
 </div>
 
-{% if is_admin and game.slug == 'quiz' %}
+{% if is_admin and game.slug in ['quiz','tictactoe'] %}
 <script>
     (function(){
         var GAME_ID = {{ game.id }};

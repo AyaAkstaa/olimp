@@ -61,6 +61,7 @@
         background: rgba(230,0,122,0.08);
         padding: 16px;
         border: 1px solid rgba(230,0,122,0.18);
+        margin-bottom: 16px;
         color: #ddd;
     }
     .register-link {
@@ -73,13 +74,37 @@
         letter-spacing: 0.08em;
         text-decoration: none;
     }
+        .schedule-list {
+        display: grid;
+        gap: 16px;
+        margin-top: 24px;
+    }
+    .schedule-item {
+        padding: 18px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+        line-height: 1.6;
+    }
+    .schedule-time {
+        color: var(--danger);
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .schedule-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .schedule-desc {
+        color: #ddd;
+    }
 </style>
 
 
 <div class="hero-card">
     <h2>Общее расписание</h2>
-    <p>Просматривайте расписание всех матчей и таблиц по каждой игре. В админке можно добавлять этапы для Геогессера, Майнкрафта, Монополии, Квиза и Крестиков-ноликов.</p>
-    <a href="/register" class="register-link">Заявить команду</a>
+    <p>Просматривайте расписание всех матчей и таблиц по каждой игре.</p>
 </div>
 
 
@@ -90,33 +115,28 @@
         <h3>{{ game.name }}</h3>
         <div class="note-box">
             {% if game.slug == 'geoguessr' %}
-                Геогессер: круговик + общая таблица.
+                Геогессер: круговик + все против всех.
             {% elif game.slug == 'minecraft' %}
                 Майнкрафт: Бинго и Бедварс. Несколько матчей внутри каждого этапа.
             {% elif game.slug == 'monopoly' %}
                 Монополия: перемешанные столы, несколько раундов с перемешиванием.
             {% elif game.slug == 'quiz' %}
-                Квиз: голосовой формат через Minecraft proximity voice.
+                Квиз: голосовой формат через Minecraft с войсчатом.
             {% elif game.slug == 'tictactoe' %}
-                Крестики-нолики: дабл-элиминация, BO3, смена игроков внутри команд.
+                Крестики-нолики: Double Elimination, BO3, смена игроков в матчах.
             {% endif %}
         </div>
-        {% set found = false %}
+
         {% for item in schedule_items %}
             {% if item.game_id == game.id %}
-                {% if not found %}
-                <div class="item-row"><strong>Время</strong><strong>Матч / Детали</strong></div>
-                {% set found = true %}
-                {% endif %}
-                <div class="item-row"><span>{{ item.time }}</span><span>{{ item.title }}{% if item.location %} — {{ item.location }}{% endif %}</span></div>
-                {% if item.description %}
-                <div class="item-row"><span>Описание</span><span>{{ item.description }}</span></div>
-                {% endif %}
+                <div class="schedule-item">
+                    <div class="schedule-time">{{ item.date.split('-')|reverse|join('.') }} {{ item.time }}</div>
+                    <div class="schedule-title">{{ item.title }}</div>
+                    <div class="schedule-desc">{{ item.description or '—' }}</div>
+                </div>
             {% endif %}
         {% endfor %}
-        {% if not found %}
-            <p style="color:#ccc; margin:12px 0 0;">Расписание для этой игры пока пустое. Заполните его в админке.</p>
-        {% endif %}
+
     </div>
     {% endfor %}
 </div>

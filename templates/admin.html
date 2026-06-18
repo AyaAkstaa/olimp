@@ -338,12 +338,13 @@
                         <option value="{{ game.id }}">{{ game.name }}</option>
                     {% endfor %}
                 </select>
+                <label>Дата</label>
+                <input type="text" name="date" placeholder="Например, 2026-07-01">
                 <label>Время</label>
                 <input type="text" name="time" required placeholder="Например, 13:00">
                 <label>Название матча</label>
                 <input type="text" name="title" required placeholder="Например, Бедварс раунд 1">
-                <label>Локация / канал</label>
-                <input type="text" name="location" placeholder="Minecraft, Discord, Лаборатория">
+                <!-- location removed, replaced by date -->
                 <label>Описание</label>
                 <textarea name="description" rows="3" placeholder="Краткое описание матча"></textarea>
                 <button type="submit">Добавить расписание</button>
@@ -400,9 +401,9 @@
             <thead>
                 <tr>
                     <th>Игра</th>
+                    <th>Дата</th>
                     <th>Время</th>
                     <th>Матч</th>
-                    <th>Локация</th>
                     <th>Описание</th>
                     <th>Действия</th>
                 </tr>
@@ -418,13 +419,13 @@
                         </select>
                     </td>
                     <td>
+                        <input form="upd_sched_{{ item.id }}" type="text" name="date" value="{{ item.date or '' }}" style="min-width:100px;">
+                    </td>
+                    <td>
                         <input form="upd_sched_{{ item.id }}" type="text" name="time" value="{{ item.time }}" style="min-width:100px;">
                     </td>
                     <td>
                         <input form="upd_sched_{{ item.id }}" type="text" name="title" value="{{ item.title }}" style="min-width:160px;">
-                    </td>
-                    <td>
-                        <input form="upd_sched_{{ item.id }}" type="text" name="location" value="{{ item.location or '' }}">
                     </td>
                     <td>
                         <input form="upd_sched_{{ item.id }}" type="text" name="description" value="{{ item.description or '' }}">

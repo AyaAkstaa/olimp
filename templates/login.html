@@ -73,21 +73,21 @@
 
 <div class="login-grid">
     <div class="login-card">
-        <h1 class="login-title">Вход в Академию</h1>
-        <p class="login-copy">Введите свои данные, чтобы получить доступ к панели управления результатами и продолжить путь студента-наблюдателя Дэгдэнронпы.</p>
+        <h1 class="login-title">Вход в кабинет директора</h1>
+        <p class="login-copy">Заперто.</p>
         {% if message %}
         <div class="login-alert">{{ message }}</div>
         {% endif %}
         <form action="/login" method="POST" class="login-form">
-            <label>Имя участника</label>
-            <input type="text" name="username" placeholder="Имя Таланта" required>
+            <label>Ключ-карта</label>
+            <input type="text" name="username" placeholder="Код карты" required>
             <label>Пароль</label>
             <input type="password" name="password" placeholder="Пароль" required>
             <button type="submit">Войти</button>
         </form>
     </div>
     <div class="login-image">
-        <img src="https://static.wikia.nocookie.net/danganronpa/images/5/51/Monokuma.png" alt="Monokuma">
+        <img src="/static/anapa.png" alt="Monokuma">
     </div>
 </div>
 {% endblock %}

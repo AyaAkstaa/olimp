@@ -18,7 +18,7 @@ import csv
 import io
 from datetime import datetime
 import traceback
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./olympiad.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -117,7 +117,8 @@ class ScheduleItem(Base):
     game_id = Column(Integer, ForeignKey("games.id"))
     title = Column(String)
     time = Column(String)
-    location = Column(String, default="")
+    date = Column(String, default="")
+    # legacy `location` removed in favor of `date`
     description = Column(String, default="")
     game = relationship("Game")
 
@@ -135,6 +136,12 @@ class RoundRobinMatch(Base):
     team_a = relationship("Team", foreign_keys=[team_a_id])
     team_b = relationship("Team", foreign_keys=[team_b_id])
 
+class Settings(Base):
+    __tablename__ = "settings"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    value = Column(String, default="")
+    
 class GameImage(Base):
     __tablename__ = "game_images"
     id = Column(Integer, primary_key=True, index=True)
@@ -144,6 +151,45 @@ class GameImage(Base):
 
 # create tables
 Base.metadata.create_all(bind=engine)
+
+# Ensure new `date` column exists in SQLite table (migration helper)
+try:
+    with engine.connect() as conn:
+        res = conn.execute("PRAGMA table_info('schedule_items')")
+        cols = [r[1] for r in res.fetchall()]
+        if 'date' not in cols:
+            try:
+                conn.execute("ALTER TABLE schedule_items ADD COLUMN date TEXT DEFAULT ''")
+            except Exception:
+                pass
+except Exception:
+    pass
+
+
+def ensure_schedule_date_column():
+    try:
+        with engine.connect() as conn:
+            res = conn.execute("PRAGMA table_info('schedule_items')")
+            cols = [r[1] for r in res.fetchall()]
+            if 'date' in cols:
+                return
+            # Try simple ALTER TABLE first
+            try:
+                conn.execute("ALTER TABLE schedule_items ADD COLUMN date TEXT DEFAULT ''")
+                return
+            except Exception:
+                # fallback: rebuild the table with the new schema and copy data
+                try:
+                    with conn.begin():
+                        conn.execute("CREATE TABLE IF NOT EXISTS schedule_items_new (id INTEGER PRIMARY KEY, game_id INTEGER, title TEXT, time TEXT, date TEXT DEFAULT '', description TEXT)")
+                        conn.execute("INSERT INTO schedule_items_new (id, game_id, title, time, date, description) SELECT id, game_id, title, time, '', description FROM schedule_items")
+                        conn.execute("DROP TABLE schedule_items")
+                        conn.execute("ALTER TABLE schedule_items_new RENAME TO schedule_items")
+                    return
+                except Exception:
+                    return
+    except Exception:
+        return
 
 app = FastAPI()
 
@@ -221,6 +267,9 @@ def _verify_admin_token(token: str, username: str, max_age: int = 86400) -> bool
 
 @app.on_event("startup")
 def startup_event():
+    # ensure DB schema migrations run before handling requests
+    ensure_schedule_date_column()
+
     db = SessionLocal()
     try:
         if not db.query(Game).first():
@@ -260,7 +309,25 @@ def read_olympiad(request: Request, db: Session = Depends(get_db)):
 @app.get("/schedule", response_class=HTMLResponse)
 def schedule_page(request: Request, db: Session = Depends(get_db)):
     games = db.query(Game).all()
-    schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+    try:
+        schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+    except OperationalError:
+        # likely missing `date` column; try to add it and retry
+        try:
+            ensure_schedule_date_column()
+            schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+        except OperationalError:
+            # final fallback: raw SQL selecting known columns (omit `date`) and build dicts
+            try:
+                with engine.connect() as conn:
+                    res = conn.execute("SELECT id, game_id, title, time, description FROM schedule_items ORDER BY game_id, time, id")
+                    rows = res.fetchall()
+                    schedule_items = [
+                        {"id": r[0], "game_id": r[1], "title": r[2], "time": r[3], "date": "", "description": r[4]}
+                        for r in rows
+                    ]
+            except Exception:
+                schedule_items = []
     team_totals = (
         db.query(
             Team.name.label("team_name"),
@@ -417,7 +484,23 @@ def read_game(request: Request, slug: str, db: Session = Depends(get_db)):
     if not game:
         return RedirectResponse(url="/")
     scores = db.query(Score).filter(Score.game_id == game.id).order_by(Score.stage, Score.match_title, desc(Score.score)).all()
-    schedule_items = db.query(ScheduleItem).filter(ScheduleItem.game_id == game.id).order_by(ScheduleItem.time, ScheduleItem.id).all()
+    try:
+        schedule_items = db.query(ScheduleItem).filter(ScheduleItem.game_id == game.id).order_by(ScheduleItem.time, ScheduleItem.id).all()
+    except OperationalError:
+        try:
+            ensure_schedule_date_column()
+            schedule_items = db.query(ScheduleItem).filter(ScheduleItem.game_id == game.id).order_by(ScheduleItem.time, ScheduleItem.id).all()
+        except OperationalError:
+            try:
+                with engine.connect() as conn:
+                    res = conn.execute(f"SELECT id, game_id, title, time, description FROM schedule_items WHERE game_id = {int(game.id)} ORDER BY time, id")
+                    rows = res.fetchall()
+                    schedule_items = [
+                        {"id": r[0], "game_id": r[1], "title": r[2], "time": r[3], "date": "", "description": r[4]}
+                        for r in rows
+                    ]
+            except Exception:
+                schedule_items = []
     rr_matches = db.query(RoundRobinMatch).filter(RoundRobinMatch.game_id == game.id).all()
     rr_teams = {}
     for match in rr_matches:
@@ -470,7 +553,23 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     teams = db.query(Team).order_by(Team.name).all()
     participants = db.query(Participant).order_by(Participant.name).all()
     scores = db.query(Score).order_by(Score.game_id, Score.stage, Score.match_title).all()
-    schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+    try:
+        schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+    except OperationalError:
+        try:
+            ensure_schedule_date_column()
+            schedule_items = db.query(ScheduleItem).order_by(ScheduleItem.game_id, ScheduleItem.time, ScheduleItem.id).all()
+        except OperationalError:
+            try:
+                with engine.connect() as conn:
+                    res = conn.execute("SELECT id, game_id, title, time, description FROM schedule_items ORDER BY game_id, time, id")
+                    rows = res.fetchall()
+                    schedule_items = [
+                        {"id": r[0], "game_id": r[1], "title": r[2], "time": r[3], "date": "", "description": r[4]}
+                        for r in rows
+                    ]
+            except Exception:
+                schedule_items = []
     # collect distinct stages and match titles to suggest in admin form
     stages_q = db.query(Score.stage).filter(Score.stage != None, Score.stage != "").distinct().all()
     stages = [s[0] for s in stages_q if s[0] and s[0].strip().lower() not in ('круговик',)]
@@ -499,6 +598,80 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         show_podium=show_podium,
         card_flags=card_flags,
     )
+
+
+@app.get("/admin/migrate_schedule")
+def migrate_schedule(request: Request, db: Session = Depends(get_db)):
+    """Admin-only route to perform one-time DB migration: add `date` column, copy location->date, drop location"""
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+    
+    result = {"status": "starting", "steps": []}
+    try:
+        with engine.connect() as conn:
+            # Check current schema
+            res = conn.execute("PRAGMA table_info('schedule_items')")
+            cols = {r[1]: r[2] for r in res.fetchall()}
+            result["steps"].append(f"Current columns: {list(cols.keys())}")
+            
+            # Step 1: Add `date` column if missing
+            if 'date' not in cols:
+                try:
+                    with conn.begin():
+                        conn.execute("ALTER TABLE schedule_items ADD COLUMN date TEXT DEFAULT ''")
+                    result["steps"].append("✓ Added `date` column")
+                except Exception as e:
+                    result["steps"].append(f"ℹ `date` column add failed (may already exist): {e}")
+            else:
+                result["steps"].append("✓ `date` column already exists")
+            
+            # Step 2: Copy location -> date
+            if 'location' in cols:
+                with conn.begin():
+                    cursor = conn.execute("UPDATE schedule_items SET date = location WHERE date = '' AND location IS NOT NULL AND location != ''")
+                    affected = cursor.rowcount
+                    result["steps"].append(f"✓ Copied {affected} rows from `location` to `date`")
+                    
+                    # Step 3: Recreate table without location
+                    result["steps"].append("Recreating table without `location`...")
+                    conn.execute("""
+                        CREATE TABLE schedule_items_new (
+                            id INTEGER PRIMARY KEY,
+                            game_id INTEGER,
+                            title TEXT,
+                            time TEXT,
+                            date TEXT DEFAULT '',
+                            description TEXT
+                        )
+                    """)
+                    conn.execute("""
+                        INSERT INTO schedule_items_new (id, game_id, title, time, date, description)
+                        SELECT id, game_id, title, time, date, description FROM schedule_items
+                    """)
+                    conn.execute("DROP TABLE schedule_items")
+                    conn.execute("ALTER TABLE schedule_items_new RENAME TO schedule_items")
+                    result["steps"].append("✓ Removed `location` column and recreated table")
+            else:
+                result["steps"].append("ℹ `location` column not found (already removed)")
+            
+            # Verify final schema
+            res = conn.execute("PRAGMA table_info('schedule_items')")
+            final_cols = [r[1] for r in res.fetchall()]
+            res = conn.execute("SELECT COUNT(*) FROM schedule_items")
+            count = res.fetchone()[0]
+            
+            result["steps"].append(f"✓ Final schema: {final_cols}")
+            result["steps"].append(f"✓ Total schedule items: {count}")
+            result["status"] = "success"
+    except Exception as e:
+        result["status"] = "error"
+        result["steps"].append(f"✗ Migration failed: {str(e)}")
+        import traceback
+        result["traceback"] = traceback.format_exc()
+    
+    return JSONResponse(result)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -1103,8 +1276,8 @@ def add_schedule(
     request: Request,
     game_id: int = Form(...),
     title: str = Form(...),
+    date: str = Form("") ,
     time: str = Form(...),
-    location: str = Form(""),
     description: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -1114,15 +1287,26 @@ def add_schedule(
         return RedirectResponse(url="/login", status_code=303)
     
     if title.strip() and time.strip():
+        # ensure schema has `date` column before inserting
+        ensure_schedule_date_column()
         schedule_item = ScheduleItem(
             game_id=game_id,
             title=title.strip(),
+            date=date.strip(),
             time=time.strip(),
-            location=location.strip(),
             description=description.strip(),
         )
-        db.add(schedule_item)
-        db.commit()
+        try:
+            db.add(schedule_item)
+            db.commit()
+        except OperationalError:
+            # try to ensure column and retry once
+            ensure_schedule_date_column()
+            try:
+                db.add(schedule_item)
+                db.commit()
+            except Exception:
+                db.rollback()
     return RedirectResponse(url="/admin", status_code=303)
 
 
@@ -1146,8 +1330,8 @@ def update_schedule(
     schedule_id: int = Form(...),
     game_id: int = Form(...),
     title: str = Form(...),
+    date: str = Form(""),
     time: str = Form(...),
-    location: str = Form(""),
     description: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -1158,12 +1342,21 @@ def update_schedule(
     
     item = db.query(ScheduleItem).filter(ScheduleItem.id == schedule_id).first()
     if item:
+        # ensure schema has `date` column before updating
+        ensure_schedule_date_column()
         item.game_id = game_id
         item.title = title.strip()
+        item.date = date.strip()
         item.time = time.strip()
-        item.location = location.strip()
         item.description = description.strip()
-        db.commit()
+        try:
+            db.commit()
+        except OperationalError:
+            ensure_schedule_date_column()
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
     return RedirectResponse(url="/admin", status_code=303)
 
 

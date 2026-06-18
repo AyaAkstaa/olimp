@@ -342,15 +342,21 @@
 
     if (titleImg) {
         titleImg.style.transformStyle = 'preserve-3d';
-        
+
         const updateTitleRect = () => {
             titleRect = titleImg.getBoundingClientRect();
         }
+        // Recompute when layout changes or image loads
         window.addEventListener('scroll', updateTitleRect);
         window.addEventListener('resize', updateTitleRect);
+        window.addEventListener('load', updateTitleRect);
+        document.addEventListener('DOMContentLoaded', updateTitleRect);
+        titleImg.addEventListener('load', updateTitleRect);
         updateTitleRect();
 
         function animateTitle() {
+            // Ensure rect is valid (image may load after initial measurement)
+            if (!titleRect || titleRect.width === 0) updateTitleRect();
             if (titleRect && titleRect.top < window.innerHeight && titleRect.bottom > 0) {
                 const x = ((mouseX - titleRect.left) / titleRect.width - 0.5) * 1.5;
                 const y = ((mouseY - titleRect.top) / titleRect.height - 0.5) * 1.5;

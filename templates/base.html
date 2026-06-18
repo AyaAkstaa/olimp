@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Олимпиада по Играм | Отчаяние и Талант</title>
+    <title>Олимпиада 1.5</title>
     <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
     <style>
         :root {
             --pink: #E6007A;
             --white: #f5f5f5;
 {% set is_blood = (request.url.path.startswith('/game') if request.url.path is defined else False) or request.url.path == '/results' or request.url.path == '/schedule' %}
-<body class="{% if request.url.path == '/' %}no-scroll{% endif %}{% if is_blood %} blood-bg{% endif %}" {% if is_blood %}style="background-image: url('/static/main/МакетГлавной_0013_Кровь.png'); background-size: 100% auto; background-position: left top; background-attachment: fixed; background-repeat: repeat-y;"{% endif %}>
+<body class="{% if request.url.path == '/' %}no-scroll{% endif %}{% if is_blood %}blood-bg{% endif %}" {% if is_blood %}style="background-image: url('/static/main/МакетГлавной_0013_Кровь.png'); background-size: 100% auto; background-position: left top; background-attachment: fixed; background-repeat: repeat-y;"{% endif %}>
             --dark-gray: #121212;
             --gray: #222;
             --danger: #ff2d7b;
@@ -23,7 +23,6 @@
             padding: 0;
             font-family: 'Russo One', sans-serif;
             color: var(--white);
-            overflow: auto;
             -webkit-overflow-scrolling: touch;
             height: 100%;
         }
@@ -190,7 +189,7 @@
         }
     </style>
 </head>
-<body class="{% if request.url.path == '/' %}no-scroll{% endif %}{% if request.url.path.startswith('/game') or request.url.path == '/results' or request.url.path == '/schedule' %} blood-bg{% endif %}">
+<body class="{% if request.url.path == '/' %}no-scroll{% endif %}{% if request.url.path.startswith('/game') or request.url.path == '/results' or request.url.path == '/schedule' %}blood-bg{% endif %}">
 
     <nav class="navbar">
         <div class="nav-brand">
@@ -201,7 +200,7 @@
             <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Главная</a>
             <a href="/schedule" class="nav-link {% if request.url.path == '/schedule' %}active{% endif %}">Расписание</a>
             <a href="/results" class="nav-link {% if request.url.path == '/results' %}active{% endif %}">Итоги</a>
-            <a href="/admin" class="nav-link {% if request.url.path == '/admin' %}active{% endif %}">Админ</a>
+            <a href="/admin" class="nav-link {% if request.url.path == '/admin' %}active{% endif %}">Кабинет</a>
         </div>
         <a href="/register" class="auth-btn"><span>Регистрация</span></a>
     </nav>
