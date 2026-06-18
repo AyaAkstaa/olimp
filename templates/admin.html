@@ -171,12 +171,18 @@
             <h1>Админ-панель</h1>
             <p style="margin:0; color:#ccc;">Добавляйте команды, участников, матчи и прямо в таблице редактируйте результаты.</p>
         </div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items:center;">
             <a href="/schedule" class="link-pill">Открыть расписание</a>
             <a href="/results" class="link-pill">Посмотреть итоги</a>
             <form action="/admin/toggle_podium" method="POST" style="display: inline;">
                 <button type="submit" class="toggle-btn {% if show_podium %}active{% endif %}">{% if show_podium %}✓ Подиум включен{% else %}☐ Подиум выключен{% endif %}</button>
             </form>
+            {% for g in games %}
+            <form action="/admin/toggle_card" method="POST" style="display:inline;">
+                <input type="hidden" name="game_slug" value="{{ g.slug }}">
+                <button type="submit" class="toggle-btn {% if card_flags and card_flags.get(g.slug) %}active{% endif %}">{% if card_flags and card_flags.get(g.slug) %}✓ {{ g.name }}: Крест{% else %}☐ {{ g.name }}: Обычная{% endif %}</button>
+            </form>
+            {% endfor %}
         </div>
     </div>
 

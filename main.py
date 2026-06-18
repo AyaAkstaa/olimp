@@ -1,6 +1,4 @@
-﻿from urllib import request
-
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
+﻿from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -59,6 +57,15 @@ GAME_ASSETS = {
     "monopoly": "Карточки_0002_Монополия.png",
     "quiz": "Карточки_0003_Квиз.png",
     "tictactoe": "Карточки_0004_Крестики.png",
+}
+
+# alternate ("cross") variants with 'Крест' prefix in filename when available
+GAME_ASSETS_CROSS = {
+    "geoguessr": "Карточки_0000_Крест_Геогессер.png",
+    "minecraft": "Карточки_0001_Крест_Майнкрафт.png",
+    "monopoly": "Карточки_0002_Крест_Моноплия.png",
+    "quiz": "Карточки_0003_Крест_Квиз.png",
+    "tictactoe": "Карточки_0004_Крест_Крестики.png",
 }
 
 
@@ -233,13 +240,26 @@ def startup_event():
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request, db: Session = Depends(get_db)):
     games = db.query(Game).all()
-    return render_template("index.html", request=request, games=games, game_assets=GAME_ASSETS)
+    # build game_assets mapping using admin flags (card_cross_<slug>)
+    game_assets = {}
+    for g in games:
+        key = f"card_cross_{g.slug}"
+        setting = db.query(Settings).filter(Settings.key == key).first()
+        use_cross = setting.value == "1" if setting else False
+        game_assets[g.slug] = GAME_ASSETS_CROSS.get(g.slug) if use_cross else GAME_ASSETS.get(g.slug)
+    return render_template("index.html", request=request, games=games, game_assets=game_assets)
 
 
 @app.get("/olympiad", response_class=HTMLResponse)
 def read_olympiad(request: Request, db: Session = Depends(get_db)):
     games = db.query(Game).all()
-    return render_template("index.html", request=request, games=games, game_assets=GAME_ASSETS)
+    game_assets = {}
+    for g in games:
+        key = f"card_cross_{g.slug}"
+        setting = db.query(Settings).filter(Settings.key == key).first()
+        use_cross = setting.value == "1" if setting else False
+        game_assets[g.slug] = GAME_ASSETS_CROSS.get(g.slug) if use_cross else GAME_ASSETS.get(g.slug)
+    return render_template("index.html", request=request, games=games, game_assets=game_assets)
 
 
 @app.get("/schedule", response_class=HTMLResponse)
@@ -335,6 +355,26 @@ def toggle_podium(request: Request, db: Session = Depends(get_db)):
     setting = db.query(Settings).filter(Settings.key == "show_podium").first()
     if not setting:
         setting = Settings(key="show_podium", value="1")
+        db.add(setting)
+    else:
+        setting.value = "0" if setting.value == "1" else "1"
+    db.commit()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/toggle_card")
+def toggle_card(request: Request, game_slug: str = Form(...), db: Session = Depends(get_db)):
+    # Verify admin
+    cookie_user = request.cookies.get("admin_user")
+    cookie_token = request.cookies.get("admin_token")
+    if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
+        return RedirectResponse(url="/login", status_code=303)
+
+    # toggle setting key 'card_cross_<slug>'
+    key = f"card_cross_{game_slug}"
+    setting = db.query(Settings).filter(Settings.key == key).first()
+    if not setting:
+        setting = Settings(key=key, value="1")
         db.add(setting)
     else:
         setting.value = "0" if setting.value == "1" else "1"
@@ -444,6 +484,12 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
     # Get show_podium setting
     show_podium_setting = db.query(Settings).filter(Settings.key == "show_podium").first()
     show_podium = show_podium_setting.value == "1" if show_podium_setting else True
+    # load card_cross flags for each game
+    card_flags = {}
+    for g in games:
+        key = f"card_cross_{g.slug}"
+        s = db.query(Settings).filter(Settings.key == key).first()
+        card_flags[g.slug] = s.value == "1" if s else False
     return render_template(
         "admin.html",
         request=request,
@@ -456,6 +502,7 @@ def admin_panel(request: Request, db: Session = Depends(get_db)):
         match_titles=match_titles,
         user=user,
         show_podium=show_podium,
+        card_flags=card_flags,
     )
 
 
@@ -491,7 +538,7 @@ def favicon():
 
 
 @app.post("/admin/add_team")
-def add_team(team_name: str = Form(...), db: Session = Depends(get_db)):
+def add_team(request: Request, team_name: str = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -512,7 +559,7 @@ def admin_logout():
 
 
 @app.post("/admin/add_participant")
-def add_participant(team_id: int = Form(...), participant_name: str = Form(...), db: Session = Depends(get_db)):
+def add_participant(request: Request, team_id: int = Form(...), participant_name: str = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -526,6 +573,7 @@ def add_participant(team_id: int = Form(...), participant_name: str = Form(...),
 
 @app.post("/admin/add_score")
 def add_score(
+    request: Request,
     game_id: int = Form(...),
     stage: str = Form(""),
     team_id: int = Form(0),
@@ -553,7 +601,7 @@ def add_score(
 
 
 @app.post("/admin/update_score")
-def update_score(score_id: int = Form(...), score: int = Form(...), notes: str = Form(""), db: Session = Depends(get_db)):
+def update_score(request: Request, score_id: int = Form(...), score: int = Form(...), notes: str = Form(""), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -1042,7 +1090,7 @@ async def scores_batch_minecraft(request: Request, db: Session = Depends(get_db)
 
 
 @app.post("/admin/delete_score")
-def delete_score(score_id: int = Form(...), db: Session = Depends(get_db)):
+def delete_score(request: Request, score_id: int = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -1057,6 +1105,7 @@ def delete_score(score_id: int = Form(...), db: Session = Depends(get_db)):
 
 @app.post("/admin/add_schedule")
 def add_schedule(
+    request: Request,
     game_id: int = Form(...),
     title: str = Form(...),
     time: str = Form(...),
@@ -1083,7 +1132,7 @@ def add_schedule(
 
 
 @app.post("/admin/delete_schedule")
-def delete_schedule(schedule_id: int = Form(...), db: Session = Depends(get_db)):
+def delete_schedule(request: Request, schedule_id: int = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -1098,6 +1147,7 @@ def delete_schedule(schedule_id: int = Form(...), db: Session = Depends(get_db))
 
 @app.post("/admin/update_schedule")
 def update_schedule(
+    request: Request,
     schedule_id: int = Form(...),
     game_id: int = Form(...),
     title: str = Form(...),
@@ -1123,7 +1173,7 @@ def update_schedule(
 
 
 @app.post("/admin/delete_team")
-def delete_team(team_id: int = Form(...), db: Session = Depends(get_db)):
+def delete_team(request: Request, team_id: int = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -1137,7 +1187,7 @@ def delete_team(team_id: int = Form(...), db: Session = Depends(get_db)):
 
 
 @app.post("/admin/update_team")
-def update_team(team_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+def update_team(request: Request, team_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -1151,7 +1201,7 @@ def update_team(team_id: int = Form(...), name: str = Form(...), db: Session = D
 
 
 @app.post("/admin/delete_participant")
-def delete_participant(participant_id: int = Form(...), db: Session = Depends(get_db)):
+def delete_participant(request: Request, participant_id: int = Form(...), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
@@ -1165,7 +1215,7 @@ def delete_participant(participant_id: int = Form(...), db: Session = Depends(ge
 
 
 @app.post("/admin/update_participant")
-def update_participant(participant_id: int = Form(...), name: str = Form(...), team_id: int = Form(0), db: Session = Depends(get_db)):
+def update_participant(request: Request, participant_id: int = Form(...), name: str = Form(...), team_id: int = Form(0), db: Session = Depends(get_db)):
     cookie_user = request.cookies.get("admin_user")
     cookie_token = request.cookies.get("admin_token")
     if not cookie_user or not cookie_token or not _verify_admin_token(cookie_token, cookie_user):
