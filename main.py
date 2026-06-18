@@ -142,13 +142,6 @@ class GameImage(Base):
     image_path = Column(String, default="")
     game = relationship("Game")
 
-class GameImage(Base):
-    __tablename__ = "game_images"
-    id = Column(Integer, primary_key=True, index=True)
-    game_id = Column(Integer, ForeignKey("games.id"), unique=True)
-    image_path = Column(String, default="")
-    game = relationship("Game")
-
 # create tables
 Base.metadata.create_all(bind=engine)
 
