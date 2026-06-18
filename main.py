@@ -1,4 +1,6 @@
-﻿from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
+﻿from urllib import request
+
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -133,12 +135,12 @@ class RoundRobinMatch(Base):
     team_a = relationship("Team", foreign_keys=[team_a_id])
     team_b = relationship("Team", foreign_keys=[team_b_id])
 
-
-class Settings(Base):
-    __tablename__ = "settings"
+class GameImage(Base):
+    __tablename__ = "game_images"
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True)
-    value = Column(String, default="")
+    game_id = Column(Integer, ForeignKey("games.id"), unique=True)
+    image_path = Column(String, default="")
+    game = relationship("Game")
 
 class GameImage(Base):
     __tablename__ = "game_images"
