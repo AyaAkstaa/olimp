@@ -60,6 +60,11 @@
             gap: 12px;
             margin-right: 20px;
         }
+        .nav-brand a {
+            display: flex;
+            align-items: center; /* выравнивает img и span по вертикали */
+            flex-direction: column; /* располагает img над span */
+        }
         .nav-brand img {
             width: 48px;
             height: auto;
@@ -193,8 +198,8 @@
 
     <nav class="navbar">
         <div class="nav-brand">
-            <img src="/static/main/МакетГлавной_0010_лого.png" alt="лого олимпиады">
-            <span>Олимпиада</span>
+            <a href="/"><img src="/static/main/МакетГлавной_0010_лого.png" alt="лого олимпиады">
+            <span>Олимпиада</span></a>
         </div>
         <div class="nav-links">
             <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Главная</a>

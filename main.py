@@ -1539,3 +1539,20 @@ def view_round(request: Request, round_id: int, db: Session = Depends(get_db)):
         matrix[matrix_key] = m
 
     return render_template("round.html", request=request, round=r, players=players, matrix=matrix)
+
+@app.get("/watch")
+async def watch_video_page(request: Request):
+    return render_template("video.html", request=request)
+
+# 2. Эндпоинт, который стримит сам видеофайл
+@app.get("/api/video")
+async def get_video_stream():
+    # Укажи правильный путь к своему видеофайлу в папке static
+    video_path = BASE_DIR / "картинки" / "main" / "mult.mp4"
+    
+    # Небольшая проверка для подстраховки (выведет точный путь в консоль, если файла нет)
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail=f"Видео не найдено по пути: {video_path}")
+    
+    # FileResponse в FastAPI автоматически поддерживает Range-запросы для перемотки
+    return FileResponse(str(video_path), media_type="video/mp4")
