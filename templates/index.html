@@ -40,7 +40,7 @@
     }
     .hero-title-img {
         width: 100%;
-        max-width: 850px;
+        max-width: 830px;
         height: auto;
         display: block;
         margin-left: 50px;
@@ -54,12 +54,12 @@
         align-items: flex-start;
         position: relative;
         min-height: 480px;
-        margin: 0 -120px 0 80px;
+        margin: 0 -50px 0 clamp(60px, 5vh, 80px);
     }
     .monokuma-giant {
         display: block;
         width: 100%;
-        max-width: 800px;
+        max-width: 700px;
         height: auto;
         cursor: pointer;
         transition: transform 0.25s ease;
@@ -67,6 +67,7 @@
         position: relative;
         z-index: 3;
         margin-bottom: -80px;
+        user-select: none;
     }
     .monokuma-giant:hover {
         transform: scale(1.03);
@@ -200,10 +201,10 @@
     .monokuma-dialogue {
         position: absolute;
         /* Позицию облака нужно будет подогнать под твою картинку */
-        top: 14%; 
+        top: 18%; 
         left: 60%; 
         width: 350px;
-        height: 250px;
+        height: 260px;
         background-image: url('/static/main/МакетГлавной_0008_Диалог.png');
         background-size: contain;
         background-repeat: no-repeat;
@@ -304,7 +305,7 @@
                     <p id="monokuma-text"></p>
                 </div>
 
-                <img src="/static/main/МакетГлавной_0009_Монокума.png" id="monokuma-sprite" alt="Монокума" style="width: 100%; height: auto; display: block; transition: opacity 0.2s ease;">
+                <img src="/static/main/МакетГлавной_0009_Монокума_в2.png" draggable="false" id="monokuma-sprite" alt="Монокума" style="width: 100%; height: auto; display: block; transition: opacity 0.2s ease;">
             </div>
             
             <div class="diagonal-section"></div>
@@ -410,17 +411,18 @@
     const monokumaText = document.getElementById('monokuma-text');
 
     // Сохраняем путь к дефолтному спрайту
-    const defaultSprite = '/static/main/МакетГлавной_0009_Монокума.png';
+    const defaultSprite = '/static/main/МакетГлавной_0009_Монокума_в2.png';
+    const angrySprite = '/static/main/МакетГлавной_0009_Монокума_Злой_в2.png';
 
     // База фраз. Добавляй свои тексты и указывай нужный спрайт
     const monokumaMessages = [
         { 
             text: "ХВАТИТ МЕНЯ ТРОГАТЬ!!", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+            sprite: angrySprite// УКАЖИ СВОЙ ПУТЬ
         },
         { 
             text: "Руки убрал", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" // УКАЖИ СВОЙ ПУТЬ
+            sprite: angrySprite// УКАЖИ СВОЙ ПУТЬ
         },
         { 
             text: "Куда я жмав", 
@@ -440,27 +442,27 @@
         },
         { 
             text: "Я тебя запомнил.", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" 
+            sprite: angrySprite
         },
         { 
             text: "Не испытывай моё терпение.", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" 
+            sprite: angrySprite
         },
         { 
             text: "Я похож на антистресс-игрушку?", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" 
+            sprite: angrySprite
         },
         { 
             text: "Продолжишь — начислю штрафные баллы.", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" 
+            sprite: angrySprite
         },
         { 
             text: "Это уже начинает выглядеть подозрительно.", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" 
+            sprite: angrySprite
         },
         { 
             text: "Ещё раз ткнёшь — дисквалификация.", 
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" 
+            sprite: angrySprite
         },
         { text: "Я бы помог, но я буквально картинка.", sprite: defaultSprite },
         { text: "С технической точки зрения ты сейчас общаешься с медведем.", sprite: defaultSprite },
@@ -488,7 +490,7 @@
         { text: "Это точно часть олимпиады?", sprite: defaultSprite },
         { text: "Ты уже ближе к сотому клику.", sprite: defaultSprite },
         { text: "Монокума одобряет твоё упорство.", sprite: defaultSprite },
-        { text: "Монокума больше не одобряет твоё упорство.", sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png" },
+        { text: "Монокума больше не одобряет твоё упорство.", sprite: angrySprite},
         { text: "Ты буквально тыкаешь в медведя.", sprite: defaultSprite },
         { text: "Нажимай быстрее, я притворюсь кнопкой.", sprite: defaultSprite },
         { text: "Пупупупу!", sprite: defaultSprite },
@@ -502,27 +504,27 @@
         { text: "Поздравляю. Медведь был нажат.", sprite: defaultSprite },
         {
             text: "Я тебе сейчас курсор откушу.",
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png"
+            sprite: angrySprite
         },
         {
             text: "Последнее предупреждение.",
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png"
+            sprite: angrySprite
         },
         {
             text: "Продолжай. Я составляю список.",
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png"
+            sprite: angrySprite
         },
         {
             text: "Я уже придумал тебе наказание.",
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png"
+            sprite: angrySprite
         },
         {
             text: "Ты очень смелый для человека в зоне досягаемости курсора.",
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png"
+            sprite: angrySprite
         },
         {
             text: "Я начинаю болеть за твоих соперников.",
-            sprite: "/static/main/МакетГлавной_0009_Монокума_Злой.png"
+            sprite: angrySprite
         },
         { text: "Ты это специально делаешь?", sprite: defaultSprite },
         { text: "Я не кнопка. Пока что.", sprite: defaultSprite },
