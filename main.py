@@ -396,6 +396,44 @@ def results_page(request: Request, db: Session = Depends(get_db)):
     # build mapping of team name -> comma-separated participants for tooltips
     teams = db.query(Team).all()
     team_participants = {t.name: ', '.join([p.name for p in t.participants]) for t in teams}
+    # Include round-robin match scores (team-based) into team totals
+    try:
+        # build mapping id->name for teams
+        team_id_name = {t.id: t.name for t in teams}
+        from collections import defaultdict
+        rr_add = defaultdict(int)
+        rr_matches = db.query(RoundRobinMatch).all()
+        for m in rr_matches:
+            if m.team_a_id and m.score_a:
+                rr_add[team_id_name.get(m.team_a_id, None)] += (m.score_a or 0)
+            if m.team_b_id and m.score_b:
+                rr_add[team_id_name.get(m.team_b_id, None)] += (m.score_b or 0)
+        # merge rr_add into team_totals
+        if rr_add:
+            new_team_totals = []
+            for row in team_totals:
+                name = row.team_name
+                extra = rr_add.get(name, 0)
+                # each row is SQLAlchemy Row-like; build tuple-like (team_name, total_with_rr)
+                total = (row.total or 0) + extra
+                new_team_totals.append((name, total))
+            # include teams that only appear in rr_add but not in team_totals
+            existing = {r[0] for r in new_team_totals}
+            for name, add in rr_add.items():
+                if name and name not in existing:
+                    new_team_totals.append((name, add))
+            # sort by total desc and replace
+            new_team_totals.sort(key=lambda x: x[1], reverse=True)
+            # convert back to objects with attributes used by template if necessary
+            # templates expect items with team_name and total attributes; create simple objects
+            class _T:
+                def __init__(self, team_name, total):
+                    self.team_name = team_name
+                    self.total = total
+            team_totals = [_T(n, t) for n, t in new_team_totals]
+    except Exception:
+        # if anything fails, fall back to original team_totals
+        pass
     return render_template(
         "results.html",
         request=request,
